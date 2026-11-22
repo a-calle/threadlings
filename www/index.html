@@ -283,6 +283,7 @@ const STR = {
       r9: 'Las telarañas bloquean el paso.|Rodéala por otro camino.|¡Listo!',
       r7: 'Naranja ▲: el hilo cambia a naranja.|Verde ■: ahora verde.|Rosa ◆: el cuarto color.'
     },
+    adFail: 'No hay anuncio disponible ahora. Inténtalo en un momento.', adLoad: 'Cargando anuncio…', buyFail: 'No se pudo completar la compra.', buyOk: '¡Gracias! Premium activado.',
     gain: '+1 💡', stuck: '¿Atascado? Toca 💡 para una pista.', adTitle: 'Sin pistas', adText: 'Mira un anuncio corto para conseguir una pista.', adWatch: 'Ver anuncio', adCancel: 'Ahora no', adPlaying: 'Anuncio de prueba… {n}s', daily: '🎁 ¡5 pistas gratis de hoy!',
     moves_txt: 'Lo has hecho en {n} movimientos.',
     colors: ['azul', 'naranja', 'verde', 'rosa'],
@@ -342,6 +343,7 @@ const STR = {
       r9: 'Webs block the way.|Go around it another way.|Done!',
       r7: 'Orange ▲: the thread turns orange.|Green ■: now green.|Pink ◆: the fourth color.'
     },
+    adFail: 'No ad available right now. Try again in a moment.', adLoad: 'Loading ad…', buyFail: 'The purchase could not be completed.', buyOk: 'Thank you! Premium activated.',
     gain: '+1 💡', stuck: 'Stuck? Tap 💡 for a hint.', adTitle: 'Out of hints', adText: 'Watch a short ad to get a hint.', adWatch: 'Watch ad', adCancel: 'Not now', adPlaying: 'Test ad… {n}s', daily: '🎁 5 free hints today!',
     moves_txt: 'You did it in {n} moves.',
     colors: ['blue', 'orange', 'green', 'pink'],
@@ -551,6 +553,52 @@ function openRecharge() {
   $('ov_ad').hidden = false;
 }
 let adTimer = null;
+// ---------------------------------------------------------------- ads + purchases (native only; web keeps the simulated versions)
+const NATIVE = !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+const ADS_TEST = true; // TODO release: set to false to serve real ads (never tap your own real ads)
+const AD_IDS = ADS_TEST
+  ? { rewarded: 'ca-app-pub-3940256099942544/5224354917', inter: 'ca-app-pub-3940256099942544/1033173712' }
+  : { rewarded: 'ca-app-pub-8984191487406696/7141836761', inter: 'ca-app-pub-8984191487406696/9158333859' };
+const PREMIUM_ID = 'premium';
+let AdM = null, adsOk = false;
+async function adsInit() {
+  if (!NATIVE) return;
+  try {
+    AdM = Capacitor.Plugins.AdMob;
+    try { const info = await AdM.requestConsentInfo(); if (info && info.isConsentFormAvailable && info.status === 'REQUIRED') await AdM.showConsentForm(); } catch (e) { console.log('consent', e); }
+    await AdM.initialize({ initializeForTesting: ADS_TEST });
+    adsOk = true;
+  } catch (e) { console.log('ads init', e); }
+  try { // restore a previous Premium purchase (new phone / reinstall)
+    const NP = Capacitor.Plugins.NativePurchases;
+    const r = await NP.getPurchases({ productType: 'inapp' });
+    if (r && r.purchases && r.purchases.some(x => x.productIdentifier === PREMIUM_ID && (x.purchaseState === undefined || String(x.purchaseState) === '1'))) { store.premium = 1; save(); applyLang(); buildGrid(); }
+  } catch (e) { console.log('restore', e); }
+}
+// Shows an ad. Web: simulated 3 s countdown. Native: real AdMob ad. Calls done() only if the ad was watched.
+function watchAd(kind, textEl, btn, done) {
+  btn.disabled = true;
+  if (!NATIVE) {
+    let n = 3; textEl.textContent = T('adPlaying').replace('{n}', n); clearInterval(adTimer);
+    adTimer = setInterval(() => { n--; if (n > 0) { textEl.textContent = T('adPlaying').replace('{n}', n); return; } clearInterval(adTimer); btn.disabled = false; done(); }, 1000);
+    return;
+  }
+  textEl.textContent = T('adLoad');
+  (async () => {
+    try {
+      if (!adsOk) throw new Error('ads not ready');
+      if (kind === 'rewarded') { await AdM.prepareRewardVideoAd({ adId: AD_IDS.rewarded, isTesting: ADS_TEST }); const r = await AdM.showRewardVideoAd(); if (!r) throw new Error('no reward'); }
+      else { await AdM.prepareInterstitial({ adId: AD_IDS.inter, isTesting: ADS_TEST }); await AdM.showInterstitial(); }
+      btn.disabled = false; done();
+    } catch (e) { console.log('ad', e); btn.disabled = false; textEl.textContent = T('adFail'); }
+  })();
+}
+async function buyPremium() {
+  const ok = () => { store.premium = 1; store.hints = Math.max(store.hints, 5); save(); $('ov_pay').hidden = true; applyLang(); buildGrid(); hintLabel(); };
+  if (!NATIVE) { if (confirm(T('buyTest'))) ok(); return; }
+  try { await Capacitor.Plugins.NativePurchases.purchaseProduct({ productIdentifier: PREMIUM_ID, productType: 'inapp' }); ok(); setMsg(T('buyOk'), 'info'); }
+  catch (e) { console.log('buy', e); $('p_text').textContent = T('buyFail'); }
+}
 function openAd() {
   $('a_title').textContent = T('adTitle'); $('a_text').textContent = T('adText');
   $('a_no').textContent = T('adCancel'); $('a_yes').textContent = '▶ ' + T('adWatch'); $('a_yes').disabled = false; $('a_yes').dataset.mode = '';
@@ -559,14 +607,7 @@ function openAd() {
 $('a_no').onclick = () => { clearInterval(adTimer); $('ov_ad').hidden = true; };
 $('a_yes').onclick = () => {
   if ($('a_yes').dataset.mode === 'rech') { dayState().rech = 1; store.hints = 30; save(); hintLabel(); $('ov_ad').hidden = true; $('a_yes').dataset.mode = ''; giveHint(); return; }
-  let n = 3; $('a_yes').disabled = true; $('a_text').textContent = T('adPlaying').replace('{n}', n);
-  clearInterval(adTimer);
-  adTimer = setInterval(() => {
-    n--;
-    if (n > 0) { $('a_text').textContent = T('adPlaying').replace('{n}', n); return; }
-    clearInterval(adTimer); $('ov_ad').hidden = true;
-    store.hints++; save(); hintLabel(); giveHint();
-  }, 1000);
+  watchAd('rewarded', $('a_text'), $('a_yes'), () => { $('ov_ad').hidden = true; store.hints++; save(); hintLabel(); giveHint(); });
 };
 
 // ---------------------------------------------------------------- drawing
@@ -837,20 +878,16 @@ function drawDemo(cv, now) {
 }
 function demoLoop(now) {
   requestAnimationFrame(demoLoop);
+adsInit();
   if ($('ov_help').hidden) return;
   document.querySelectorAll('canvas.dm').forEach(cv => { const r = cv.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) drawDemo(cv, now); });
 }
 requestAnimationFrame(demoLoop);
 $('b_help').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
 $('p_no').onclick = () => { clearInterval(adTimer); $('ov_pay').hidden = true; };
-$('p_buy').onclick = () => { if (confirm(T('buyTest'))) { store.premium = 1; store.hints = Math.max(store.hints, 5); save(); $('ov_pay').hidden = true; applyLang(); buildGrid(); hintLabel(); } };
+$('p_buy').onclick = () => buyPremium();
 $('b_prem').onclick = () => { if (store.premium) return; openPay(Math.min(store.unlocked, LEVELS.length) - 1); $('p_title').textContent = T('buyBtn'); $('p_text').textContent = ''; $('p_ad').style.display = 'none'; };
-$('p_ad').onclick = () => {
-  let n = 3; $('p_ad').disabled = true; $('p_text').textContent = T('adPlaying').replace('{n}', n);
-  clearInterval(adTimer);
-  adTimer = setInterval(() => { n--; if (n > 0) { $('p_text').textContent = T('adPlaying').replace('{n}', n); return; }
-    clearInterval(adTimer); dayState().extra++; save(); $('ov_pay').hidden = true; buildGrid(); startLevel(payIdx); }, 1000);
-};
+$('p_ad').onclick = () => watchAd('inter', $('p_text'), $('p_ad'), () => { dayState().extra++; save(); $('ov_pay').hidden = true; buildGrid(); startLevel(payIdx); });
 $('b_how').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
 $('h_close').onclick = () => { $('ov_help').hidden = true; };
 $('b_lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; store.lang = lang; save(); applyLang(); if (L && !$('game').hidden && introShown) setMsg(INTRO2[lang][lvIdx + 1] || STR[lang].intro[lvIdx] || '', 'info', true); };

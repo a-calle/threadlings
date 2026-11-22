@@ -17,6 +17,11 @@ jobs:
       - run: npm install
       - name: Generate Android project
         run: npx cap add android
+      - name: Configure AdMob app id
+        run: |
+          sed -i 's#</resources>#    <string name="admob_app_id">ca-app-pub-8984191487406696~7524980143</string>\n</resources>#' android/app/src/main/res/values/strings.xml
+          sed -i 's#</application>#    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          grep -n "admob\|APPLICATION_ID" android/app/src/main/res/values/strings.xml android/app/src/main/AndroidManifest.xml
       - run: npx cap sync android
       - name: Build release bundle (unsigned)
         working-directory: android
