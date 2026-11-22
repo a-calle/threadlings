@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Threadlings — prototype</title>
+<style>
+  :root { --bg:#11131d; --panel:#1a1d2b; --line:#2a2e44; --txt:#f2f3f8; --mut:#9aa0bb; --pink:#ff78aa; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overscroll-behavior:none; }
+  #app { max-width:460px; margin:0 auto; min-height:100%; padding:14px 14px 18px; display:flex; flex-direction:column; }
+  section[hidden], .overlay[hidden] { display:none !important; }
+  h1 { font-size:44px; margin:18px 0 4px; letter-spacing:1px; text-align:center; }
+  .tag { text-align:center; color:var(--mut); margin:0 0 22px; }
+  .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .wh { grid-column:1 / -1; margin:14px 0 2px; color:var(--mut); font-weight:700; font-size:14px; letter-spacing:.5px; }
+  .lv { aspect-ratio:1; border-radius:14px; border:2px solid var(--line); background:var(--panel); color:var(--txt);
+    font-size:20px; font-weight:700; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; }
+  .lv small { font-size:11px; color:#ffc840; letter-spacing:1px; min-height:13px; }
+  .lv[disabled] { opacity:.35; cursor:default; }
+  .lv.next { border-color:var(--pink); }
+  .row { display:flex; gap:10px; justify-content:center; margin-top:22px; flex-wrap:wrap; }
+  button.b { background:var(--panel); border:2px solid var(--line); color:var(--txt); border-radius:14px; padding:11px 16px;
+    font-size:15px; font-weight:600; cursor:pointer; }
+  button.b.main { background:var(--pink); border-color:var(--pink); color:#2a0f1b; }
+  button.b:active { transform:scale(.97); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .top .ttl { font-size:18px; font-weight:700; }
+  .top .mv { color:var(--mut); font-size:14px; min-width:90px; text-align:right; }
+  .top button { width:44px; height:44px; padding:0; font-size:20px; }
+  #msg { min-height:48px; margin:8px 0 4px; padding:10px 12px; border-radius:12px; font-size:15px; line-height:1.3; text-align:center;
+    display:flex; align-items:center; justify-content:center; background:transparent; transition:background .2s; }
+  #msg.info { background:#202640; } #msg.err { background:#4a1f2a; color:#ffd6dc; } #msg.ok { background:#1d3a2b; color:#c8f5dc; }
+  .cwrap { display:flex; justify-content:center; }
+  canvas { touch-action:none; border-radius:18px; background:#151827; border:2px solid var(--line); }
+  .bar { display:flex; align-items:center; justify-content:center; gap:10px; margin:12px 0 4px; color:var(--mut); font-size:15px; }
+  .chip { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:20px; font-weight:700; color:#10121a; transition:background .2s; }
+  .actions { display:flex; gap:10px; justify-content:center; margin-top:10px; }
+  .actions .b { flex:1; max-width:140px; padding:12px 6px; }
+  .overlay { position:fixed; inset:0; background:rgba(8,9,14,.82); display:flex; align-items:center; justify-content:center; padding:20px; z-index:10; }
+  .card { background:var(--panel); border:2px solid var(--line); border-radius:22px; padding:24px 22px; width:100%; max-width:380px; text-align:center; }
+  .card h2 { margin:0 0 10px; font-size:26px; }
+  .card p { color:var(--mut); margin:6px 0 14px; }
+  .stars { font-size:38px; letter-spacing:6px; color:#ffc840; margin:6px 0; }
+  .rules { text-align:left; padding:0; margin:12px 0 18px; list-style:none; counter-reset:r; }
+  .rules li { counter-increment:r; margin:10px 0; padding-left:34px; position:relative; line-height:1.35; }
+  .rules li::before { content:counter(r); position:absolute; left:0; top:0; width:24px; height:24px; border-radius:50%; background:var(--pink); color:#2a0f1b; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  .legend { display:flex; justify-content:center; gap:14px; font-size:13px; color:var(--mut); margin-bottom:6px; }
+  #hero { display:block; margin:0 auto; }
+  .stat { text-align:center; color:var(--mut); font-size:14px; margin:0 0 14px; }
+  .stat b { color:#ffc840; }
+  button.b.big { display:block; width:100%; padding:16px; font-size:19px; border-radius:18px; margin:0 0 14px; }
+  .best { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 0 6px; }
+  .best span { background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:5px 12px; font-size:13px; color:var(--txt); }
+  .best small { width:100%; text-align:center; color:var(--mut); font-size:12px; margin-bottom:2px; }
+  .lv.q { border-style:dashed; color:#4b5170; cursor:default; }
+  .lv.next { animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(255,120,170,.0); } 50% { box-shadow:0 0 0 5px rgba(255,120,170,.28); } }
+  .soon { grid-column:1 / -1; text-align:center; color:var(--mut); padding:14px; border:2px dashed var(--line); border-radius:14px; font-size:14px; }
+  .b.glow { animation:pulse 1.2s ease-in-out infinite; border-color:var(--pink); }
+  .overlay .card { max-height:92vh; overflow-y:auto; }
+  .dt { width:34px; height:8px; border-radius:6px; background:var(--line); border:0; padding:0; cursor:pointer; }
+  .dt.on { background:var(--pink); }
+  canvas.dm { display:block; width:100%; aspect-ratio:9/6; margin-top:8px; border-radius:12px; background:#151827; border:2px solid var(--line); }
+  .dmc { min-height:36px; margin-top:6px; font-weight:700; font-size:14px; line-height:1.3; color:var(--txt); }
+  .proto { text-align:center; color:#6c7290; font-size:12px; margin-top:18px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="menu">
+    <canvas id="hero"></canvas>
+    <h1 id="t_title">Threadlings</h1>
+    <p class="tag" id="t_tag"></p>
+    <p class="stat" id="t_stat"></p>
+    <button class="b main big" id="b_play"></button>
+    <div class="best" id="best"></div>
+    <div class="grid" id="grid"></div>
+    <div class="row">
+      <button class="b" id="b_how"></button>
+      <button class="b" id="b_prem"></button>
+      <button class="b" id="b_lang">ES / EN</button>
+    </div>
+    <p class="proto" id="t_proto"></p>
+  </section>
+
+  <section id="game" hidden>
+    <div class="top">
+      <button class="b" id="b_back" aria-label="menu">←</button>
+      <div class="ttl" id="t_level"></div>
+      <div class="mv" id="t_moves"></div>
+      <button class="b" id="b_help" aria-label="help" style="padding:8px 14px;font-weight:800">?</button>
+    </div>
+    <div id="msg" class="info"></div>
+    <div class="cwrap"><canvas id="cv"></canvas></div>
+    <div class="bar"><span id="t_thread"></span><span class="chip" id="chip"></span></div>
+    <div class="actions">
+      <button class="b" id="b_undo"></button>
+      <button class="b" id="b_reset"></button>
+      <button class="b main" id="b_hint"></button>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="ov_win" hidden>
+  <div class="card">
+    <h2 id="w_title"></h2>
+    <div class="stars" id="w_stars"></div>
+    <p id="w_text"></p>
+    <div class="row" style="margin-top:6px">
+      <button class="b" id="w_menu"></button>
+      <button class="b" id="w_retry"></button>
+      <button class="b main" id="w_next"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ov_ad" hidden>
+  <div class="card">
+    <h2 id="a_title"></h2>
+    <p id="a_text"></p>
+    <div class="row" style="margin-top:6px">
+      <button class="b" id="a_no"></button>
+      <button class="b main" id="a_yes"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ov_pay" hidden>
+  <div class="card">
+    <h2 id="p_title"></h2>
+    <p id="p_text"></p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+      <button class="b" id="p_ad"></button>
+      <button class="b main" id="p_buy"></button>
+      <button class="b" id="p_no"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ov_help" hidden>
+  <div class="card">
+    <h2 id="h_title"></h2>
+    <div id="h_rule" style="font-weight:600;min-height:66px;margin:6px 0 10px;line-height:1.35;text-align:left"></div>
+    <canvas class="dm" id="dm1" data-k="r1"></canvas><div class="dmc"></div>
+    <div id="dm_nav" style="display:flex;align-items:center;justify-content:center;gap:8px;margin:8px 0 14px"></div>
+    <div class="legend" id="h_legend"></div>
+    <button class="b main" id="h_close"></button>
+  </div>
+</div>
+
+<script>
+// Hilo core rules + solver (shared by generator and game)
+const Hilo = (() => {
+  function cross(a, b, c, d) {
+    const o = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+  }
+  function crossPoint(a, b, c, d) {
+    const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+    const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den;
+    return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+  }
+  function through(L, i, j) {
+    const a = L.pegs[i], b = L.pegs[j];
+    const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+    for (let k = 0; k < L.pegs.length; k++) {
+      if (k === i || k === j) continue;
+      const p = L.pegs[k];
+      const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+      if (t <= 0.02 || t >= 0.98) continue;
+      if (Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y) < 0.25) return true;
+    }
+    return false;
+  }
+  // path: array of visited peg indices (starts with 0). Returns {ok, reason, at}
+  function canMove(L, path, j) {
+    const i = path[path.length - 1];
+    if (j === i || path.includes(j)) return { ok: false, reason: 'visited' };
+    const col = L.pegs[i].c;
+    if (L.pegs[j].c === -1) return { ok: false, reason: 'rock' };
+    if (j === L.goal && L.stars) {
+      if (L.stars.some(k => !path.includes(k))) return { ok: false, reason: 'stars' };
+      if (L.cat) { const rem = path.slice(Math.floor(path.length / 3)); if (L.stars.some(k => !rem.includes(k))) return { ok: false, reason: 'stareaten' }; }
+    }
+    if (j === L.goal && col !== L.goalColor) return { ok: false, reason: 'goalcolor' };
+    if (L.alt && j !== L.goal && L.pegs[j].c === col) return { ok: false, reason: 'same' };
+    if (L.spider && j === L.spider.route[(path.length - 1) % L.spider.route.length]) return { ok: false, reason: 'spider' };
+    if (through(L, i, j)) return { ok: false, reason: 'through' };
+    if (L.webs) for (const w of L.webs) {
+      if (cross(L.pegs[i], L.pegs[j], L.pegs[w[0]], L.pegs[w[1]])) return { ok: false, reason: 'web', at: crossPoint(L.pegs[i], L.pegs[j], L.pegs[w[0]], L.pegs[w[1]]) };
+    }
+    const eaten = L.cat ? Math.floor((path.length - 1) / 3) : 0;
+    for (let k = eaten; k + 1 < path.length; k++) {
+      if (L.pegs[path[k]].c !== col) continue;
+      const a = L.pegs[path[k]], b = L.pegs[path[k + 1]];
+      if (cross(L.pegs[i], L.pegs[j], a, b)) {
+        return { ok: false, reason: 'cross', at: crossPoint(L.pegs[i], L.pegs[j], a, b) };
+      }
+    }
+    return { ok: true };
+  }
+  function crossings(L, path) {
+    let n = 0;
+    for (let i = 0; i + 1 < path.length; i++)
+      for (let k = 0; k + 1 < i; k++)
+        if (cross(L.pegs[path[i]], L.pegs[path[i + 1]], L.pegs[path[k]], L.pegs[path[k + 1]])) n++;
+    return n;
+  }
+  // enumerate solutions from a path prefix. limit caps the count.
+  function solve(L, start, limit = 100000) {
+    const sols = [];
+    const path = start ? start.slice() : [0];
+    (function dfs() {
+      if (sols.length >= limit) return;
+      const last = path[path.length - 1];
+      if (last === L.goal) { sols.push(path.slice()); return; }
+      for (let j = 0; j < L.pegs.length; j++) {
+        if (canMove(L, path, j).ok) { path.push(j); dfs(); path.pop(); }
+      }
+    })();
+    return sols;
+  }
+  function shortest(L, start) {
+    const sols = solve(L, start);
+    let best = null;
+    for (const s of sols) if (!best || s.length < best.length) best = s;
+    return best;
+  }
+  return { canMove, solve, shortest, crossings, cross };
+})();
+
+const LEVELS = [{"pegs":[{"x":2,"y":6,"c":0},{"x":3,"y":3,"c":0},{"x":2,"y":0,"c":0}],"goal":2,"goalColor":0,"opt":1},{"pegs":[{"x":2,"y":6,"c":0},{"x":3,"y":4,"c":1},{"x":1,"y":3,"c":2},{"x":2,"y":0,"c":0}],"goal":3,"goalColor":2,"spider":{"route":[2,1]},"opt":3},{"pegs":[{"x":3,"y":6,"c":1},{"x":2,"y":2,"c":2},{"x":2,"y":3,"c":2},{"x":4,"y":5,"c":0},{"x":0,"y":0,"c":0}],"goal":4,"goalColor":0,"cols":5,"rows":7,"stars":[1],"opt":4},{"pegs":[{"x":2,"y":6,"c":0},{"x":0,"y":1,"c":0},{"x":0,"y":2,"c":1},{"x":1,"y":4,"c":2},{"x":3,"y":0,"c":0}],"goal":4,"goalColor":1,"cols":5,"rows":7,"opt":3},{"pegs":[{"x":0,"y":6,"c":2},{"x":1,"y":1,"c":0},{"x":2,"y":5,"c":1},{"x":3,"y":3,"c":0},{"x":1,"y":2,"c":2},{"x":2,"y":0,"c":0}],"goal":5,"goalColor":1,"cols":5,"rows":7,"stars":[1],"cat":true,"opt":5},{"pegs":[{"x":4,"y":6,"c":2},{"x":2,"y":5,"c":1},{"x":1,"y":4,"c":2},{"x":2,"y":1,"c":0},{"x":0,"y":3,"c":2},{"x":3,"y":0,"c":0}],"goal":5,"goalColor":1,"cols":5,"rows":7,"stars":[4],"opt":5},{"pegs":[{"x":0,"y":6,"c":1},{"x":2,"y":3,"c":0},{"x":3,"y":2,"c":1},{"x":4,"y":5,"c":2},{"x":4,"y":1,"c":1},{"x":0,"y":0,"c":0}],"goal":5,"goalColor":2,"cols":5,"rows":7,"stars":[4],"opt":5},{"pegs":[{"x":0,"y":6,"c":0},{"x":1,"y":1,"c":0},{"x":0,"y":3,"c":1},{"x":2,"y":4,"c":2},{"x":1,"y":5,"c":0},{"x":2,"y":0,"c":0}],"goal":5,"goalColor":1,"cols":5,"rows":7,"stars":[3],"spider":{"route":[2,1]},"opt":5},{"pegs":[{"x":2,"y":6,"c":0},{"x":2,"y":2,"c":0},{"x":3,"y":1,"c":0},{"x":3,"y":2,"c":0},{"x":1,"y":5,"c":1},{"x":1,"y":0,"c":0}],"goal":5,"goalColor":1,"cols":5,"rows":7,"stars":[2],"opt":4},{"pegs":[{"x":4,"y":6,"c":0},{"x":4,"y":2,"c":1},{"x":2,"y":2,"c":0},{"x":3,"y":3,"c":1},{"x":1,"y":4,"c":0},{"x":4,"y":1,"c":0},{"x":1,"y":0,"c":0}],"goal":6,"goalColor":1,"cols":5,"rows":7,"stars":[5],"spider":{"route":[1,5]},"opt":5},{"pegs":[{"x":3,"y":6,"c":2},{"x":2,"y":2,"c":0},{"x":0,"y":4,"c":0},{"x":1,"y":3,"c":1},{"x":3,"y":1,"c":0},{"x":3,"y":4,"c":0},{"x":0,"y":0,"c":0}],"goal":6,"goalColor":1,"cols":5,"rows":7,"stars":[2,4],"cat":true,"opt":6},{"pegs":[{"x":1,"y":6,"c":2},{"x":1,"y":3,"c":0},{"x":0,"y":3,"c":2},{"x":4,"y":5,"c":1},{"x":4,"y":1,"c":0},{"x":2,"y":3,"c":2},{"x":2,"y":0,"c":0}],"goal":6,"goalColor":1,"cols":5,"rows":7,"stars":[2,5],"spider":{"route":[2,1]},"opt":6},{"pegs":[{"x":2,"y":6,"c":1},{"x":1,"y":1,"c":0},{"x":0,"y":1,"c":1},{"x":1,"y":2,"c":1},{"x":1,"y":3,"c":2},{"x":0,"y":4,"c":2},{"x":0,"y":0,"c":0}],"goal":6,"goalColor":2,"cols":5,"rows":7,"stars":[1,3],"opt":6},{"pegs":[{"x":1,"y":6,"c":0},{"x":4,"y":5,"c":2},{"x":1,"y":4,"c":2},{"x":1,"y":1,"c":0},{"x":4,"y":2,"c":1},{"x":1,"y":3,"c":2},{"x":1,"y":2,"c":2},{"x":3,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":5,"rows":7,"stars":[2,3],"spider":{"route":[2,5]},"opt":6},{"pegs":[{"x":0,"y":6,"c":1},{"x":0,"y":3,"c":0},{"x":4,"y":3,"c":2},{"x":1,"y":1,"c":2},{"x":0,"y":5,"c":0},{"x":1,"y":2,"c":1},{"x":3,"y":4,"c":2},{"x":4,"y":0,"c":0}],"goal":7,"goalColor":0,"cols":5,"rows":7,"stars":[3,6],"cat":true,"opt":5},{"pegs":[{"x":0,"y":6,"c":1},{"x":4,"y":4,"c":0},{"x":2,"y":2,"c":2},{"x":4,"y":2,"c":2},{"x":4,"y":3,"c":2},{"x":2,"y":5,"c":2},{"x":2,"y":3,"c":0},{"x":3,"y":0,"c":0}],"goal":7,"goalColor":0,"cols":5,"rows":7,"stars":[1,2,5],"spider":{"route":[2,6]},"opt":6},{"pegs":[{"x":4,"y":6,"c":1},{"x":0,"y":2,"c":1},{"x":3,"y":2,"c":1},{"x":4,"y":4,"c":2},{"x":0,"y":1,"c":1},{"x":4,"y":2,"c":1},{"x":2,"y":4,"c":2},{"x":2,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":5,"rows":7,"stars":[1,2,5],"opt":6},{"pegs":[{"x":2,"y":6,"c":0},{"x":1,"y":1,"c":2},{"x":0,"y":1,"c":2},{"x":0,"y":2,"c":0},{"x":0,"y":4,"c":2},{"x":1,"y":3,"c":1},{"x":0,"y":5,"c":0},{"x":3,"y":3,"c":1},{"x":0,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":5,"rows":7,"stars":[2,3,6],"spider":{"route":[5,3]},"opt":7},{"pegs":[{"x":3,"y":6,"c":1},{"x":2,"y":2,"c":1},{"x":3,"y":3,"c":2},{"x":2,"y":5,"c":0},{"x":3,"y":5,"c":1},{"x":1,"y":1,"c":1},{"x":2,"y":4,"c":0},{"x":1,"y":2,"c":2},{"x":3,"y":0,"c":0}],"goal":8,"goalColor":0,"cols":5,"rows":7,"stars":[2,3,4],"cat":true,"opt":5},{"pegs":[{"x":4,"y":6,"c":2},{"x":4,"y":2,"c":2},{"x":4,"y":5,"c":1},{"x":1,"y":3,"c":2},{"x":4,"y":4,"c":0},{"x":2,"y":4,"c":0},{"x":3,"y":5,"c":0},{"x":4,"y":1,"c":0},{"x":1,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":5,"rows":7,"stars":[3,4,7],"spider":{"route":[7,1]},"opt":7},{"pegs":[{"x":4,"y":7,"c":0},{"x":2,"y":5,"c":0},{"x":2,"y":6,"c":2},{"x":4,"y":2,"c":1},{"x":1,"y":5,"c":0},{"x":1,"y":6,"c":1},{"x":4,"y":5,"c":1},{"x":4,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":6,"rows":8,"stars":[3,6],"alt":true,"cat":true,"opt":7},{"pegs":[{"x":3,"y":7,"c":2},{"x":5,"y":3,"c":1},{"x":4,"y":6,"c":2},{"x":2,"y":2,"c":0},{"x":4,"y":1,"c":0},{"x":5,"y":5,"c":1},{"x":4,"y":2,"c":1},{"x":5,"y":0,"c":0}],"goal":7,"goalColor":0,"cols":6,"rows":8,"stars":[2,5],"alt":true,"spider":{"route":[2,5]},"opt":7},{"pegs":[{"x":0,"y":7,"c":2},{"x":5,"y":3,"c":2},{"x":3,"y":1,"c":2},{"x":0,"y":2,"c":0},{"x":2,"y":3,"c":1},{"x":2,"y":6,"c":1},{"x":0,"y":3,"c":1},{"x":1,"y":0,"c":0}],"goal":7,"goalColor":1,"cols":6,"rows":8,"stars":[1,2],"alt":true,"spider":{"route":[1,2,4,2]},"opt":7},{"pegs":[{"x":2,"y":7,"c":1},{"x":1,"y":6,"c":2},{"x":0,"y":6,"c":1},{"x":5,"y":4,"c":2},{"x":5,"y":1,"c":0},{"x":1,"y":5,"c":2},{"x":1,"y":4,"c":1},{"x":0,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":6,"rows":8,"stars":[2,4],"alt":true,"opt":7},{"pegs":[{"x":1,"y":7,"c":2},{"x":1,"y":6,"c":0},{"x":3,"y":1,"c":1},{"x":3,"y":2,"c":2},{"x":0,"y":5,"c":0},{"x":2,"y":1,"c":0},{"x":1,"y":3,"c":2},{"x":4,"y":0,"c":0}],"goal":7,"goalColor":0,"cols":6,"rows":8,"stars":[1,4],"alt":true,"spider":{"route":[5,2,3,2]},"cat":true,"opt":7},{"pegs":[{"x":5,"y":7,"c":2},{"x":1,"y":2,"c":2},{"x":4,"y":2,"c":0},{"x":0,"y":5,"c":2},{"x":3,"y":6,"c":1},{"x":1,"y":1,"c":0},{"x":4,"y":6,"c":1},{"x":5,"y":0,"c":0}],"goal":7,"goalColor":1,"cols":6,"rows":8,"stars":[1,3],"alt":true,"spider":{"route":[5,1]},"opt":7},{"pegs":[{"x":3,"y":7,"c":0},{"x":1,"y":1,"c":0},{"x":3,"y":2,"c":1},{"x":5,"y":5,"c":0},{"x":2,"y":6,"c":2},{"x":5,"y":4,"c":1},{"x":2,"y":2,"c":0},{"x":3,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":6,"rows":8,"stars":[1,5],"alt":true,"opt":6},{"pegs":[{"x":2,"y":7,"c":0},{"x":0,"y":1,"c":0},{"x":2,"y":1,"c":1},{"x":5,"y":2,"c":2},{"x":0,"y":4,"c":2},{"x":4,"y":6,"c":2},{"x":5,"y":3,"c":0},{"x":0,"y":0,"c":0}],"goal":7,"goalColor":2,"cols":6,"rows":8,"stars":[3,4],"alt":true,"spider":{"route":[3,6]},"webs":[[5,6]],"opt":7},{"pegs":[{"x":5,"y":7,"c":2},{"x":0,"y":6,"c":1},{"x":4,"y":4,"c":1},{"x":5,"y":5,"c":2},{"x":0,"y":5,"c":0},{"x":3,"y":2,"c":0},{"x":0,"y":4,"c":2},{"x":4,"y":0,"c":0}],"goal":7,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,6],"alt":true,"spider":{"route":[5,2,3,2]},"cat":true,"opt":7},{"pegs":[{"x":1,"y":7,"c":0},{"x":0,"y":5,"c":1},{"x":0,"y":1,"c":2},{"x":4,"y":5,"c":0},{"x":2,"y":1,"c":2},{"x":3,"y":1,"c":0},{"x":1,"y":5,"c":1},{"x":2,"y":0,"c":0}],"goal":7,"goalColor":1,"cols":6,"rows":8,"stars":[2,5,6],"alt":true,"opt":7},{"pegs":[{"x":0,"y":7,"c":0},{"x":1,"y":3,"c":2},{"x":3,"y":3,"c":1},{"x":5,"y":1,"c":2},{"x":2,"y":2,"c":2},{"x":5,"y":4,"c":1},{"x":2,"y":6,"c":1},{"x":1,"y":2,"c":1},{"x":3,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":6,"rows":8,"stars":[3,5,6],"alt":true,"spider":{"route":[6,1,7,1]},"opt":7},{"pegs":[{"x":4,"y":7,"c":0},{"x":0,"y":4,"c":0},{"x":4,"y":5,"c":1},{"x":5,"y":5,"c":0},{"x":0,"y":5,"c":1},{"x":2,"y":3,"c":1},{"x":2,"y":6,"c":2},{"x":5,"y":4,"c":2},{"x":5,"y":0,"c":0}],"goal":8,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,4],"alt":true,"spider":{"route":[4,1]},"webs":[[5,6]],"opt":8},{"pegs":[{"x":1,"y":7,"c":1},{"x":5,"y":6,"c":1},{"x":0,"y":4,"c":0},{"x":3,"y":3,"c":2},{"x":3,"y":6,"c":2},{"x":1,"y":5,"c":2},{"x":3,"y":2,"c":0},{"x":1,"y":3,"c":1},{"x":3,"y":0,"c":0}],"goal":8,"goalColor":2,"cols":6,"rows":8,"stars":[1,3,4],"alt":true,"cat":true,"opt":8},{"pegs":[{"x":5,"y":7,"c":2},{"x":0,"y":4,"c":2},{"x":5,"y":1,"c":2},{"x":5,"y":3,"c":1},{"x":4,"y":1,"c":1},{"x":1,"y":3,"c":0},{"x":4,"y":3,"c":1},{"x":3,"y":1,"c":0},{"x":0,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":6,"rows":8,"stars":[1,4,5],"alt":true,"spider":{"route":[7,4]},"opt":8},{"pegs":[{"x":0,"y":7,"c":1},{"x":3,"y":5,"c":0},{"x":4,"y":5,"c":0},{"x":5,"y":5,"c":2},{"x":0,"y":3,"c":2},{"x":1,"y":1,"c":1},{"x":4,"y":4,"c":0},{"x":2,"y":1,"c":1},{"x":4,"y":0,"c":0}],"goal":8,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,7],"alt":true,"spider":{"route":[6,2,1,2]},"opt":8},{"pegs":[{"x":5,"y":7,"c":0},{"x":4,"y":2,"c":1},{"x":3,"y":1,"c":0},{"x":0,"y":1,"c":1},{"x":4,"y":5,"c":0},{"x":4,"y":3,"c":2},{"x":1,"y":5,"c":0},{"x":5,"y":2,"c":2},{"x":0,"y":0,"c":0}],"goal":8,"goalColor":2,"cols":6,"rows":8,"stars":[1,3,4],"alt":true,"webs":[[4,6]],"opt":7},{"pegs":[{"x":3,"y":7,"c":0},{"x":0,"y":4,"c":1},{"x":0,"y":2,"c":0},{"x":0,"y":3,"c":1},{"x":4,"y":1,"c":2},{"x":5,"y":5,"c":1},{"x":5,"y":3,"c":0},{"x":1,"y":3,"c":2},{"x":1,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":6,"rows":8,"stars":[1,2,4,7],"alt":true,"spider":{"route":[3,1,7,1]},"cat":true,"opt":8},{"pegs":[{"x":0,"y":7,"c":2},{"x":0,"y":1,"c":0},{"x":2,"y":4,"c":1},{"x":4,"y":5,"c":2},{"x":4,"y":2,"c":2},{"x":1,"y":6,"c":0},{"x":1,"y":5,"c":1},{"x":3,"y":4,"c":1},{"x":4,"y":0,"c":0}],"goal":8,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,3,7],"alt":true,"spider":{"route":[2,7]},"opt":8},{"pegs":[{"x":4,"y":7,"c":1},{"x":0,"y":3,"c":2},{"x":3,"y":3,"c":1},{"x":2,"y":6,"c":1},{"x":3,"y":4,"c":0},{"x":3,"y":6,"c":1},{"x":1,"y":5,"c":0},{"x":0,"y":1,"c":2},{"x":2,"y":0,"c":0}],"goal":8,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,3,5],"alt":true,"opt":8},{"pegs":[{"x":2,"y":7,"c":0},{"x":2,"y":3,"c":2},{"x":0,"y":3,"c":2},{"x":4,"y":5,"c":1},{"x":4,"y":6,"c":2},{"x":5,"y":2,"c":0},{"x":1,"y":3,"c":0},{"x":2,"y":4,"c":1},{"x":3,"y":0,"c":0}],"goal":8,"goalColor":1,"cols":6,"rows":8,"stars":[3,4,5,6],"alt":true,"spider":{"route":[5,1]},"webs":[[1,2]],"opt":8},{"pegs":[{"x":5,"y":7,"c":0},{"x":3,"y":1,"c":1},{"x":4,"y":5,"c":0},{"x":0,"y":6,"c":2},{"x":0,"y":2,"c":0},{"x":0,"y":4,"c":2},{"x":3,"y":4,"c":2},{"x":5,"y":4,"c":2},{"x":1,"y":2,"c":1},{"x":1,"y":0,"c":0}],"goal":9,"goalColor":1,"cols":6,"rows":8,"stars":[3,4,5,6],"alt":true,"spider":{"route":[4,8,1,8]},"cat":true,"opt":8},{"pegs":[{"x":2,"y":7,"c":1},{"x":2,"y":3,"c":0},{"x":1,"y":1,"c":1},{"x":3,"y":2,"c":2},{"x":3,"y":6,"c":2},{"x":1,"y":4,"c":2},{"x":3,"y":1,"c":1},{"x":1,"y":2,"c":0},{"x":0,"y":6,"c":0},{"x":5,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[2,4,5,6],"alt":true,"opt":9},{"pegs":[{"x":0,"y":7,"c":1},{"x":5,"y":5,"c":1},{"x":4,"y":6,"c":2},{"x":0,"y":6,"c":2},{"x":4,"y":3,"c":0},{"x":1,"y":3,"c":2},{"x":0,"y":2,"c":2},{"x":2,"y":2,"c":0},{"x":1,"y":2,"c":0},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,4,5,6],"alt":true,"spider":{"route":[8,5,6,5]},"opt":9},{"pegs":[{"x":5,"y":7,"c":1},{"x":0,"y":3,"c":0},{"x":0,"y":1,"c":1},{"x":3,"y":5,"c":1},{"x":4,"y":3,"c":2},{"x":4,"y":2,"c":1},{"x":2,"y":2,"c":2},{"x":5,"y":5,"c":2},{"x":1,"y":4,"c":0},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,5,7],"alt":true,"spider":{"route":[4,5]},"webs":[[6,8]],"opt":9},{"pegs":[{"x":2,"y":7,"c":0},{"x":3,"y":3,"c":0},{"x":5,"y":4,"c":2},{"x":4,"y":5,"c":1},{"x":0,"y":3,"c":2},{"x":5,"y":2,"c":2},{"x":0,"y":5,"c":2},{"x":4,"y":1,"c":0},{"x":5,"y":6,"c":0},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":1,"cols":6,"rows":8,"stars":[2,3,4,6,7],"alt":true,"cat":true,"opt":9},{"pegs":[{"x":3,"y":7,"c":2},{"x":1,"y":4,"c":1},{"x":5,"y":6,"c":1},{"x":1,"y":1,"c":2},{"x":5,"y":3,"c":2},{"x":4,"y":2,"c":0},{"x":2,"y":3,"c":0},{"x":4,"y":5,"c":1},{"x":2,"y":1,"c":2},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,3,4,8],"alt":true,"spider":{"route":[2,7]},"opt":9},{"pegs":[{"x":4,"y":7,"c":1},{"x":0,"y":5,"c":1},{"x":3,"y":3,"c":1},{"x":5,"y":4,"c":0},{"x":5,"y":5,"c":0},{"x":1,"y":3,"c":2},{"x":4,"y":1,"c":0},{"x":2,"y":4,"c":2},{"x":2,"y":3,"c":0},{"x":1,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,3,4,6,7],"alt":true,"spider":{"route":[4,3,2,3]},"opt":9},{"pegs":[{"x":0,"y":7,"c":1},{"x":5,"y":1,"c":1},{"x":3,"y":3,"c":2},{"x":1,"y":4,"c":1},{"x":3,"y":2,"c":2},{"x":5,"y":2,"c":1},{"x":4,"y":2,"c":2},{"x":2,"y":6,"c":0},{"x":4,"y":1,"c":0},{"x":4,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,3,4,5],"alt":true,"webs":[[2,8]],"opt":9},{"pegs":[{"x":4,"y":7,"c":1},{"x":3,"y":5,"c":1},{"x":5,"y":4,"c":2},{"x":5,"y":5,"c":2},{"x":5,"y":3,"c":0},{"x":1,"y":3,"c":1},{"x":1,"y":4,"c":0},{"x":2,"y":2,"c":2},{"x":2,"y":6,"c":0},{"x":4,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,4,6,7,8],"alt":true,"spider":{"route":[1,8,6,8]},"cat":true,"opt":9},{"pegs":[{"x":0,"y":7,"c":2},{"x":5,"y":3,"c":0},{"x":2,"y":2,"c":2},{"x":5,"y":4,"c":0},{"x":3,"y":2,"c":0},{"x":2,"y":6,"c":1},{"x":1,"y":5,"c":0},{"x":5,"y":1,"c":2},{"x":3,"y":6,"c":1},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,4,6,8],"alt":true,"spider":{"route":[3,1]},"webs":[[4,7]],"opt":9},{"pegs":[{"x":5,"y":7,"c":0},{"x":0,"y":2,"c":0},{"x":4,"y":1,"c":0},{"x":5,"y":4,"c":3},{"x":5,"y":3,"c":3},{"x":3,"y":6,"c":2},{"x":5,"y":1,"c":1},{"x":1,"y":6,"c":2},{"x":4,"y":3,"c":1},{"x":5,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,3,5],"alt":true,"spider":{"route":[5,7,1,7]},"webs":[[5,8]],"opt":8},{"pegs":[{"x":1,"y":7,"c":2},{"x":0,"y":3,"c":3},{"x":2,"y":2,"c":1},{"x":1,"y":5,"c":3},{"x":4,"y":3,"c":0},{"x":5,"y":6,"c":1},{"x":1,"y":4,"c":2},{"x":2,"y":5,"c":3},{"x":0,"y":1,"c":0},{"x":5,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,7,8],"alt":true,"spider":{"route":[6,3,7,3]},"cat":true,"opt":9},{"pegs":[{"x":3,"y":7,"c":2},{"x":3,"y":4,"c":2},{"x":1,"y":6,"c":2},{"x":1,"y":4,"c":2},{"x":0,"y":5,"c":3},{"x":0,"y":4,"c":1},{"x":5,"y":2,"c":2},{"x":0,"y":2,"c":1},{"x":3,"y":2,"c":0},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":3,"cols":6,"rows":8,"stars":[2,3,5,7],"alt":true,"opt":7},{"pegs":[{"x":2,"y":7,"c":2},{"x":1,"y":1,"c":3},{"x":2,"y":4,"c":2},{"x":2,"y":2,"c":2},{"x":4,"y":1,"c":1},{"x":5,"y":1,"c":1},{"x":1,"y":3,"c":2},{"x":3,"y":2,"c":1},{"x":0,"y":2,"c":0},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[2,4,6,7],"alt":true,"spider":{"route":[6,2,3,2]},"webs":[[3,4]],"opt":9},{"pegs":[{"x":4,"y":7,"c":0},{"x":1,"y":2,"c":3},{"x":2,"y":4,"c":1},{"x":1,"y":3,"c":0},{"x":5,"y":6,"c":1},{"x":0,"y":4,"c":2},{"x":5,"y":2,"c":2},{"x":4,"y":2,"c":2},{"x":4,"y":5,"c":2},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":1,"cols":6,"rows":8,"stars":[3,4,6,7],"alt":true,"spider":{"route":[4,8,2,8]},"cat":true,"opt":9},{"pegs":[{"x":2,"y":7,"c":2},{"x":5,"y":3,"c":2},{"x":1,"y":6,"c":3},{"x":5,"y":5,"c":2},{"x":4,"y":6,"c":3},{"x":3,"y":4,"c":2},{"x":5,"y":1,"c":1},{"x":2,"y":4,"c":0},{"x":1,"y":5,"c":3},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,4,8],"alt":true,"spider":{"route":[8,2,7,2]},"opt":9},{"pegs":[{"x":2,"y":7,"c":0},{"x":1,"y":6,"c":3},{"x":5,"y":2,"c":3},{"x":1,"y":4,"c":3},{"x":0,"y":6,"c":1},{"x":2,"y":2,"c":0},{"x":3,"y":2,"c":3},{"x":3,"y":4,"c":2},{"x":2,"y":3,"c":2},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,6,8],"alt":true,"webs":[[1,3]],"opt":9},{"pegs":[{"x":1,"y":7,"c":1},{"x":1,"y":2,"c":1},{"x":5,"y":4,"c":2},{"x":0,"y":1,"c":2},{"x":4,"y":1,"c":2},{"x":5,"y":1,"c":0},{"x":4,"y":3,"c":3},{"x":2,"y":1,"c":0},{"x":5,"y":2,"c":3},{"x":1,"y":0,"c":0}],"goal":9,"goalColor":3,"cols":6,"rows":8,"stars":[1,2,3,5],"alt":true,"spider":{"route":[1,3,7,3]},"cat":true,"opt":9},{"pegs":[{"x":5,"y":7,"c":1},{"x":5,"y":5,"c":1},{"x":0,"y":1,"c":3},{"x":4,"y":1,"c":3},{"x":5,"y":2,"c":2},{"x":2,"y":5,"c":0},{"x":1,"y":6,"c":0},{"x":0,"y":3,"c":3},{"x":0,"y":6,"c":3},{"x":1,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,3,7],"alt":true,"spider":{"route":[7,2,3,2]},"opt":8},{"pegs":[{"x":3,"y":7,"c":1},{"x":5,"y":4,"c":1},{"x":0,"y":1,"c":0},{"x":4,"y":4,"c":3},{"x":4,"y":1,"c":3},{"x":3,"y":1,"c":2},{"x":2,"y":4,"c":3},{"x":3,"y":3,"c":3},{"x":2,"y":1,"c":1},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":2,"cols":6,"rows":8,"stars":[4,5,6,8],"alt":true,"spider":{"route":[4,5,8,5]},"webs":[[7,8]],"opt":8},{"pegs":[{"x":0,"y":7,"c":3},{"x":4,"y":5,"c":2},{"x":3,"y":1,"c":3},{"x":5,"y":3,"c":2},{"x":5,"y":4,"c":2},{"x":3,"y":6,"c":0},{"x":3,"y":2,"c":1},{"x":2,"y":3,"c":3},{"x":1,"y":1,"c":1},{"x":5,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[3,4,5,6,8],"alt":true,"cat":true,"opt":9},{"pegs":[{"x":2,"y":7,"c":0},{"x":3,"y":5,"c":0},{"x":1,"y":3,"c":0},{"x":3,"y":3,"c":3},{"x":4,"y":5,"c":1},{"x":2,"y":6,"c":2},{"x":3,"y":2,"c":3},{"x":4,"y":3,"c":3},{"x":2,"y":2,"c":1},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":1,"cols":6,"rows":8,"stars":[2,3,6,7,8],"alt":true,"spider":{"route":[7,3,6,3]},"opt":9},{"pegs":[{"x":2,"y":7,"c":3},{"x":5,"y":2,"c":2},{"x":4,"y":3,"c":2},{"x":5,"y":6,"c":0},{"x":5,"y":5,"c":1},{"x":1,"y":5,"c":3},{"x":3,"y":5,"c":0},{"x":5,"y":4,"c":0},{"x":4,"y":4,"c":3},{"x":3,"y":0,"c":0}],"goal":9,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,5,7,8],"alt":true,"spider":{"route":[2,8,7,8]},"webs":[[3,6]],"opt":9},{"pegs":[{"x":4,"y":7,"c":1},{"x":2,"y":1,"c":0},{"x":2,"y":6,"c":3},{"x":3,"y":2,"c":1},{"x":1,"y":3,"c":2},{"x":1,"y":2,"c":1},{"x":2,"y":4,"c":2},{"x":2,"y":3,"c":3},{"x":2,"y":2,"c":2},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":3,"cols":6,"rows":8,"stars":[4,5,6,7,8],"alt":true,"spider":{"route":[3,8,1,8]},"cat":true,"opt":9},{"pegs":[{"x":2,"y":7,"c":1},{"x":5,"y":5,"c":2},{"x":4,"y":4,"c":3},{"x":5,"y":1,"c":1},{"x":1,"y":6,"c":0},{"x":5,"y":3,"c":0},{"x":2,"y":3,"c":1},{"x":5,"y":4,"c":0},{"x":0,"y":6,"c":0},{"x":0,"y":0,"c":0}],"goal":9,"goalColor":3,"cols":6,"rows":8,"stars":[4,5,6,7,8],"alt":true,"opt":9},{"pegs":[{"x":3,"y":7,"c":1},{"x":2,"y":4,"c":3},{"x":2,"y":5,"c":3},{"x":4,"y":4,"c":0},{"x":4,"y":2,"c":3},{"x":2,"y":6,"c":1},{"x":1,"y":4,"c":2},{"x":2,"y":1,"c":1},{"x":3,"y":3,"c":3},{"x":3,"y":5,"c":0},{"x":0,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,4,5,6,8],"alt":true,"spider":{"route":[1,2,5,2]},"webs":[[6,9]],"opt":10},{"pegs":[{"x":2,"y":7,"c":3},{"x":4,"y":5,"c":1},{"x":5,"y":4,"c":2},{"x":3,"y":2,"c":1},{"x":0,"y":1,"c":3},{"x":1,"y":4,"c":1},{"x":5,"y":2,"c":0},{"x":4,"y":6,"c":3},{"x":3,"y":6,"c":1},{"x":1,"y":2,"c":0},{"x":0,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[5,6,7,8,9],"alt":true,"spider":{"route":[6,2,1,2]},"cat":true,"opt":10},{"pegs":[{"x":5,"y":7,"c":1},{"x":1,"y":4,"c":2},{"x":0,"y":1,"c":0},{"x":2,"y":2,"c":0},{"x":3,"y":3,"c":3},{"x":2,"y":1,"c":1},{"x":5,"y":6,"c":2},{"x":4,"y":3,"c":2},{"x":4,"y":1,"c":1},{"x":4,"y":2,"c":0},{"x":1,"y":0,"c":0}],"goal":10,"goalColor":3,"cols":6,"rows":8,"stars":[1,4,6,7,9],"alt":true,"spider":{"route":[7,4,3,4]},"opt":10},{"pegs":[{"x":5,"y":7,"c":3},{"x":2,"y":6,"c":0},{"x":0,"y":4,"c":3},{"x":1,"y":2,"c":3},{"x":2,"y":3,"c":2},{"x":4,"y":2,"c":2},{"x":1,"y":6,"c":2},{"x":1,"y":3,"c":3},{"x":1,"y":1,"c":1},{"x":5,"y":4,"c":3},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[2,4,6,7,9],"alt":true,"webs":[[4,6]],"opt":9},{"pegs":[{"x":0,"y":7,"c":3},{"x":5,"y":6,"c":3},{"x":0,"y":3,"c":2},{"x":4,"y":6,"c":0},{"x":4,"y":5,"c":1},{"x":0,"y":5,"c":3},{"x":4,"y":1,"c":1},{"x":1,"y":2,"c":0},{"x":0,"y":2,"c":2},{"x":2,"y":4,"c":0},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[2,3,5,7,8],"alt":true,"spider":{"route":[5,2,8,2]},"cat":true,"opt":10},{"pegs":[{"x":0,"y":7,"c":1},{"x":0,"y":1,"c":3},{"x":3,"y":4,"c":2},{"x":0,"y":2,"c":0},{"x":5,"y":6,"c":3},{"x":4,"y":1,"c":3},{"x":4,"y":2,"c":0},{"x":5,"y":1,"c":3},{"x":1,"y":3,"c":2},{"x":0,"y":5,"c":1},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,4,5,6,7],"alt":true,"spider":{"route":[1,3,8,3]},"opt":10},{"pegs":[{"x":1,"y":7,"c":1},{"x":4,"y":4,"c":0},{"x":1,"y":5,"c":3},{"x":1,"y":4,"c":2},{"x":3,"y":5,"c":0},{"x":1,"y":3,"c":1},{"x":3,"y":2,"c":3},{"x":5,"y":4,"c":3},{"x":3,"y":6,"c":0},{"x":1,"y":6,"c":0},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[3,4,5,6,7,9],"alt":true,"spider":{"route":[2,3,5,3]},"webs":[[4,9]],"opt":10},{"pegs":[{"x":5,"y":7,"c":2},{"x":0,"y":3,"c":3},{"x":5,"y":5,"c":0},{"x":3,"y":6,"c":3},{"x":0,"y":1,"c":0},{"x":1,"y":6,"c":3},{"x":1,"y":3,"c":1},{"x":0,"y":2,"c":2},{"x":4,"y":5,"c":1},{"x":4,"y":3,"c":3},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[3,4,5,6,8,9],"alt":true,"cat":true,"opt":10},{"pegs":[{"x":4,"y":7,"c":0},{"x":3,"y":6,"c":0},{"x":3,"y":3,"c":2},{"x":1,"y":4,"c":3},{"x":0,"y":3,"c":3},{"x":4,"y":6,"c":1},{"x":5,"y":1,"c":1},{"x":4,"y":1,"c":0},{"x":1,"y":5,"c":3},{"x":2,"y":4,"c":3},{"x":3,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[3,4,5,7,8,9],"alt":true,"spider":{"route":[8,3,9,3]},"opt":10},{"pegs":[{"x":2,"y":7,"c":2},{"x":5,"y":1,"c":0},{"x":0,"y":2,"c":0},{"x":4,"y":1,"c":2},{"x":5,"y":4,"c":2},{"x":1,"y":4,"c":0},{"x":4,"y":4,"c":2},{"x":0,"y":3,"c":3},{"x":2,"y":5,"c":2},{"x":0,"y":6,"c":1},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[2,3,4,5,7,8],"alt":true,"spider":{"route":[3,1,4,1]},"webs":[[7,9]],"opt":10},{"pegs":[{"x":2,"y":7,"c":3},{"x":1,"y":3,"c":1},{"x":0,"y":3,"c":2},{"x":4,"y":5,"c":1},{"x":0,"y":2,"c":0},{"x":5,"y":6,"c":2},{"x":2,"y":5,"c":0},{"x":1,"y":2,"c":3},{"x":3,"y":1,"c":0},{"x":4,"y":3,"c":2},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[2,4,5,6,8,9],"alt":true,"spider":{"route":[1,2,4,2]},"cat":true,"opt":10},{"pegs":[{"x":1,"y":7,"c":3},{"x":0,"y":1,"c":3},{"x":1,"y":3,"c":0},{"x":4,"y":4,"c":2},{"x":5,"y":3,"c":3},{"x":0,"y":5,"c":1},{"x":1,"y":2,"c":0},{"x":3,"y":2,"c":0},{"x":4,"y":2,"c":3},{"x":5,"y":5,"c":3},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[1,4,6,7,8,9],"alt":true,"opt":10},{"pegs":[{"x":5,"y":7,"c":2},{"x":0,"y":3,"c":1},{"x":4,"y":3,"c":0},{"x":1,"y":6,"c":2},{"x":2,"y":3,"c":0},{"x":0,"y":2,"c":1},{"x":0,"y":4,"c":2},{"x":1,"y":2,"c":2},{"x":5,"y":5,"c":3},{"x":1,"y":4,"c":1},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":3,"cols":6,"rows":8,"stars":[2,3,5,6,7,9],"alt":true,"spider":{"route":[3,9,6,9]},"webs":[[1,4]],"opt":10},{"pegs":[{"x":1,"y":7,"c":3},{"x":5,"y":1,"c":1},{"x":0,"y":4,"c":0},{"x":3,"y":1,"c":0},{"x":2,"y":5,"c":0},{"x":4,"y":1,"c":1},{"x":3,"y":4,"c":1},{"x":1,"y":1,"c":2},{"x":4,"y":4,"c":3},{"x":4,"y":2,"c":3},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[1,2,3,4,6,9],"alt":true,"spider":{"route":[1,5,3,5]},"cat":true,"opt":10},{"pegs":[{"x":4,"y":7,"c":1},{"x":1,"y":3,"c":0},{"x":3,"y":1,"c":0},{"x":5,"y":4,"c":1},{"x":2,"y":2,"c":2},{"x":5,"y":2,"c":3},{"x":3,"y":4,"c":1},{"x":4,"y":4,"c":1},{"x":2,"y":3,"c":1},{"x":4,"y":3,"c":3},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,3,4,7,8,9],"alt":true,"spider":{"route":[7,3,9,3]},"opt":9},{"pegs":[{"x":5,"y":7,"c":2},{"x":1,"y":4,"c":1},{"x":5,"y":6,"c":3},{"x":3,"y":5,"c":2},{"x":0,"y":5,"c":1},{"x":3,"y":2,"c":0},{"x":3,"y":6,"c":2},{"x":3,"y":3,"c":3},{"x":3,"y":1,"c":1},{"x":2,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":3,"cols":6,"rows":8,"stars":[2,5,6,8,9],"alt":true,"spider":{"route":[8,5,7,5]},"webs":[[7,8]],"cat":true,"opt":10},{"pegs":[{"x":1,"y":7,"c":3},{"x":5,"y":2,"c":0},{"x":4,"y":5,"c":0},{"x":0,"y":5,"c":3},{"x":1,"y":5,"c":0},{"x":1,"y":4,"c":0},{"x":3,"y":3,"c":3},{"x":4,"y":3,"c":2},{"x":5,"y":3,"c":1},{"x":2,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,3,4,7],"alt":true,"spider":{"route":[2,7,6,7]},"opt":8},{"pegs":[{"x":3,"y":7,"c":0},{"x":4,"y":6,"c":3},{"x":0,"y":6,"c":2},{"x":4,"y":3,"c":0},{"x":0,"y":3,"c":2},{"x":2,"y":1,"c":3},{"x":4,"y":2,"c":1},{"x":5,"y":6,"c":2},{"x":1,"y":6,"c":3},{"x":2,"y":3,"c":2},{"x":3,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[1,2,3,5,7],"alt":true,"spider":{"route":[7,1,3,1]},"webs":[[1,3]],"opt":9},{"pegs":[{"x":2,"y":7,"c":2},{"x":0,"y":2,"c":3},{"x":3,"y":4,"c":1},{"x":1,"y":5,"c":1},{"x":0,"y":5,"c":1},{"x":3,"y":1,"c":0},{"x":2,"y":2,"c":0},{"x":1,"y":1,"c":2},{"x":3,"y":5,"c":3},{"x":4,"y":1,"c":1},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[2,3,4,5,6],"alt":true,"cat":true,"opt":10},{"pegs":[{"x":2,"y":7,"c":0},{"x":5,"y":6,"c":0},{"x":2,"y":6,"c":1},{"x":1,"y":4,"c":2},{"x":4,"y":5,"c":2},{"x":4,"y":2,"c":0},{"x":3,"y":6,"c":0},{"x":2,"y":5,"c":1},{"x":5,"y":1,"c":3},{"x":5,"y":2,"c":2},{"x":1,"y":0,"c":0}],"goal":10,"goalColor":3,"cols":6,"rows":8,"stars":[1,2,5,6,9],"alt":true,"spider":{"route":[4,1,6,1]},"webs":[[2,4]],"opt":10},{"pegs":[{"x":1,"y":7,"c":3},{"x":1,"y":5,"c":3},{"x":5,"y":3,"c":0},{"x":3,"y":2,"c":0},{"x":0,"y":6,"c":2},{"x":1,"y":2,"c":1},{"x":3,"y":5,"c":3},{"x":4,"y":4,"c":0},{"x":1,"y":3,"c":0},{"x":4,"y":2,"c":3},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,3,6,8,9],"alt":true,"spider":{"route":[1,4,6,4]},"opt":10},{"pegs":[{"x":0,"y":7,"c":3},{"x":0,"y":3,"c":2},{"x":1,"y":3,"c":3},{"x":5,"y":5,"c":3},{"x":4,"y":5,"c":2},{"x":0,"y":2,"c":1},{"x":5,"y":6,"c":1},{"x":4,"y":6,"c":2},{"x":0,"y":5,"c":2},{"x":5,"y":1,"c":0},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":1,"cols":6,"rows":8,"stars":[2,5,7,8,9],"alt":true,"spider":{"route":[1,2,5,2]},"webs":[[5,8]],"cat":true,"opt":10},{"pegs":[{"x":4,"y":7,"c":3},{"x":3,"y":1,"c":3},{"x":5,"y":6,"c":3},{"x":0,"y":2,"c":3},{"x":0,"y":5,"c":1},{"x":1,"y":1,"c":0},{"x":3,"y":3,"c":2},{"x":2,"y":6,"c":2},{"x":2,"y":2,"c":2},{"x":3,"y":2,"c":3},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,4,7,8,9],"alt":true,"spider":{"route":[2,7,4,7]},"opt":9},{"pegs":[{"x":5,"y":7,"c":2},{"x":3,"y":1,"c":2},{"x":5,"y":4,"c":0},{"x":2,"y":2,"c":0},{"x":3,"y":5,"c":3},{"x":4,"y":1,"c":0},{"x":3,"y":4,"c":0},{"x":2,"y":4,"c":1},{"x":2,"y":6,"c":2},{"x":5,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,5,6,9],"alt":true,"spider":{"route":[2,6,4,6]},"webs":[[2,9]],"opt":9},{"pegs":[{"x":1,"y":7,"c":1},{"x":2,"y":3,"c":0},{"x":1,"y":5,"c":1},{"x":4,"y":3,"c":3},{"x":2,"y":2,"c":2},{"x":2,"y":5,"c":3},{"x":5,"y":1,"c":3},{"x":1,"y":2,"c":1},{"x":3,"y":6,"c":0},{"x":1,"y":4,"c":3},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[2,3,6,8,9],"alt":true,"cat":true,"opt":10},{"pegs":[{"x":0,"y":7,"c":3},{"x":2,"y":1,"c":2},{"x":4,"y":2,"c":2},{"x":0,"y":1,"c":2},{"x":2,"y":2,"c":1},{"x":4,"y":6,"c":3},{"x":0,"y":4,"c":1},{"x":0,"y":5,"c":2},{"x":3,"y":4,"c":1},{"x":3,"y":6,"c":0},{"x":4,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,3,5,8,9],"alt":true,"spider":{"route":[8,9,5,9]},"webs":[[7,8]],"opt":10},{"pegs":[{"x":4,"y":7,"c":1},{"x":0,"y":6,"c":1},{"x":0,"y":5,"c":3},{"x":1,"y":5,"c":3},{"x":5,"y":5,"c":3},{"x":5,"y":6,"c":2},{"x":1,"y":6,"c":1},{"x":0,"y":1,"c":2},{"x":4,"y":6,"c":0},{"x":4,"y":3,"c":3},{"x":0,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,5,6,7,9],"alt":true,"spider":{"route":[1,2,3,2]},"opt":10},{"pegs":[{"x":0,"y":7,"c":0},{"x":0,"y":1,"c":1},{"x":1,"y":1,"c":2},{"x":2,"y":6,"c":1},{"x":0,"y":3,"c":3},{"x":0,"y":6,"c":1},{"x":3,"y":5,"c":3},{"x":5,"y":3,"c":1},{"x":5,"y":5,"c":3},{"x":2,"y":4,"c":0},{"x":2,"y":0,"c":0}],"goal":10,"goalColor":2,"cols":6,"rows":8,"stars":[1,4,5,6,7,8],"alt":true,"spider":{"route":[5,3,6,3]},"webs":[[4,9]],"cat":true,"opt":10},{"pegs":[{"x":2,"y":7,"c":0},{"x":2,"y":5,"c":1},{"x":0,"y":1,"c":3},{"x":4,"y":4,"c":0},{"x":3,"y":5,"c":1},{"x":1,"y":1,"c":1},{"x":0,"y":6,"c":1},{"x":1,"y":6,"c":3},{"x":0,"y":5,"c":1},{"x":4,"y":1,"c":2},{"x":5,"y":0,"c":0}],"goal":10,"goalColor":3,"cols":6,"rows":8,"stars":[1,2,3,5,6,7],"alt":true,"spider":{"route":[1,4,3,4]},"opt":9},{"pegs":[{"x":3,"y":7,"c":2},{"x":4,"y":1,"c":1},{"x":3,"y":5,"c":0},{"x":4,"y":5,"c":3},{"x":2,"y":2,"c":3},{"x":5,"y":5,"c":2},{"x":2,"y":1,"c":3},{"x":1,"y":3,"c":2},{"x":0,"y":5,"c":0},{"x":0,"y":1,"c":3},{"x":0,"y":0,"c":0}],"goal":10,"goalColor":0,"cols":6,"rows":8,"stars":[2,4,5,6,8,9],"alt":true,"spider":{"route":[4,6,1,6]},"webs":[[2,4],[2,5]],"opt":10},{"pegs":[{"x":0,"y":7,"c":1},{"x":4,"y":6,"c":3},{"x":1,"y":6,"c":3},{"x":5,"y":3,"c":2},{"x":3,"y":5,"c":1},{"x":3,"y":6,"c":0},{"x":3,"y":3,"c":1},{"x":5,"y":6,"c":1},{"x":0,"y":3,"c":0},{"x":2,"y":5,"c":1},{"x":2,"y":2,"c":3},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[2,4,5,7,9,10],"alt":true,"cat":true,"opt":11},{"pegs":[{"x":1,"y":7,"c":3},{"x":0,"y":3,"c":0},{"x":1,"y":4,"c":3},{"x":5,"y":4,"c":2},{"x":3,"y":2,"c":2},{"x":5,"y":5,"c":0},{"x":1,"y":3,"c":1},{"x":4,"y":5,"c":0},{"x":1,"y":5,"c":3},{"x":0,"y":4,"c":3},{"x":4,"y":2,"c":3},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":8,"stars":[2,3,5,8,9,10],"alt":true,"spider":{"route":[4,10,3,10]},"webs":[[4,7],[3,10]],"opt":11},{"pegs":[{"x":2,"y":7,"c":1},{"x":0,"y":6,"c":2},{"x":1,"y":6,"c":1},{"x":0,"y":5,"c":2},{"x":4,"y":2,"c":3},{"x":3,"y":1,"c":0},{"x":0,"y":1,"c":1},{"x":4,"y":6,"c":3},{"x":5,"y":6,"c":1},{"x":1,"y":5,"c":2},{"x":0,"y":2,"c":2},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":8,"stars":[1,2,3,4,6,9],"alt":true,"spider":{"route":[5,4,7,4]},"opt":10},{"pegs":[{"x":1,"y":7,"c":1},{"x":2,"y":1,"c":0},{"x":0,"y":5,"c":0},{"x":3,"y":3,"c":1},{"x":3,"y":1,"c":0},{"x":5,"y":1,"c":2},{"x":4,"y":5,"c":0},{"x":0,"y":6,"c":3},{"x":1,"y":3,"c":1},{"x":5,"y":4,"c":3},{"x":4,"y":4,"c":3},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[2,3,4,5,9,10],"alt":true,"spider":{"route":[1,4,3,4]},"webs":[[5,10],[3,5]],"cat":true,"opt":10},{"pegs":[{"x":5,"y":7,"c":1},{"x":3,"y":6,"c":2},{"x":2,"y":6,"c":0},{"x":0,"y":5,"c":3},{"x":2,"y":3,"c":3},{"x":3,"y":3,"c":3},{"x":1,"y":2,"c":3},{"x":5,"y":6,"c":3},{"x":0,"y":3,"c":1},{"x":2,"y":1,"c":0},{"x":4,"y":6,"c":0},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":8,"stars":[3,4,5,7,9,10],"alt":true,"spider":{"route":[6,4,5,4]},"opt":10},{"pegs":[{"x":5,"y":7,"c":3},{"x":1,"y":5,"c":2},{"x":4,"y":6,"c":0},{"x":2,"y":4,"c":3},{"x":0,"y":2,"c":2},{"x":5,"y":4,"c":3},{"x":2,"y":1,"c":3},{"x":0,"y":1,"c":1},{"x":3,"y":6,"c":2},{"x":3,"y":1,"c":1},{"x":3,"y":3,"c":3},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":8,"stars":[1,2,4,5,6,7,8],"alt":true,"spider":{"route":[3,1,8,1]},"webs":[[2,3],[6,7]],"opt":11},{"pegs":[{"x":3,"y":7,"c":1},{"x":4,"y":1,"c":0},{"x":3,"y":3,"c":1},{"x":2,"y":3,"c":2},{"x":4,"y":5,"c":2},{"x":1,"y":3,"c":2},{"x":5,"y":3,"c":1},{"x":2,"y":4,"c":3},{"x":5,"y":5,"c":2},{"x":3,"y":1,"c":2},{"x":3,"y":5,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":8,"stars":[1,2,3,5,7,8,9],"alt":true,"cat":true,"opt":11},{"pegs":[{"x":1,"y":7,"c":2},{"x":0,"y":5,"c":3},{"x":2,"y":5,"c":0},{"x":4,"y":6,"c":2},{"x":0,"y":4,"c":2},{"x":2,"y":6,"c":2},{"x":4,"y":1,"c":0},{"x":2,"y":2,"c":1},{"x":1,"y":3,"c":1},{"x":2,"y":4,"c":2},{"x":0,"y":6,"c":1},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":8,"stars":[1,3,4,5,6,9,10],"alt":true,"spider":{"route":[2,5,3,5]},"webs":[[7,9],[1,5]],"opt":11},{"pegs":[{"x":1,"y":7,"c":0},{"x":5,"y":2,"c":1},{"x":5,"y":5,"c":1},{"x":0,"y":4,"c":3},{"x":2,"y":5,"c":2},{"x":4,"y":3,"c":3},{"x":1,"y":3,"c":1},{"x":0,"y":2,"c":3},{"x":3,"y":4,"c":3},{"x":4,"y":6,"c":3},{"x":0,"y":3,"c":0},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[2,3,5,6,8,9,10],"alt":true,"spider":{"route":[9,2,5,2]},"opt":10},{"pegs":[{"x":0,"y":7,"c":1},{"x":0,"y":2,"c":2},{"x":0,"y":1,"c":1},{"x":1,"y":1,"c":3},{"x":3,"y":5,"c":0},{"x":5,"y":1,"c":1},{"x":5,"y":2,"c":0},{"x":1,"y":4,"c":2},{"x":1,"y":2,"c":3},{"x":2,"y":6,"c":2},{"x":0,"y":5,"c":1},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":8,"stars":[1,3,5,6,7,8,9],"alt":true,"spider":{"route":[1,2,3,2]},"webs":[[1,7],[3,7]],"cat":true,"opt":11},{"pegs":[{"x":1,"y":7,"c":2},{"x":2,"y":4,"c":2},{"x":1,"y":2,"c":1},{"x":4,"y":3,"c":1},{"x":5,"y":6,"c":0},{"x":4,"y":6,"c":0},{"x":4,"y":2,"c":0},{"x":5,"y":2,"c":0},{"x":1,"y":3,"c":1},{"x":3,"y":6,"c":3},{"x":4,"y":5,"c":3},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":8,"stars":[2,3,4,5,6,8,10],"alt":true,"spider":{"route":[10,5,4,5]},"opt":10},{"pegs":[{"x":3,"y":7,"c":0},{"x":5,"y":1,"c":1},{"x":2,"y":3,"c":3},{"x":1,"y":6,"c":2},{"x":5,"y":6,"c":2},{"x":0,"y":1,"c":1},{"x":5,"y":4,"c":0},{"x":1,"y":3,"c":2},{"x":5,"y":5,"c":3},{"x":1,"y":2,"c":1},{"x":0,"y":3,"c":0},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,4,5,6,7,8],"alt":true,"spider":{"route":[4,8,6,8]},"webs":[[2,5],[2,10]],"opt":11},{"pegs":[{"x":3,"y":7,"c":0},{"x":0,"y":6,"c":3},{"x":5,"y":1,"c":3},{"x":1,"y":4,"c":1},{"x":2,"y":1,"c":1},{"x":3,"y":6,"c":2},{"x":4,"y":3,"c":1},{"x":3,"y":1,"c":0},{"x":2,"y":5,"c":2},{"x":2,"y":4,"c":1},{"x":4,"y":4,"c":2},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[1,2,3,4,7,8,9],"alt":true,"cat":true,"opt":11},{"pegs":[{"x":1,"y":7,"c":0},{"x":4,"y":2,"c":0},{"x":0,"y":5,"c":0},{"x":2,"y":2,"c":3},{"x":4,"y":1,"c":0},{"x":1,"y":5,"c":0},{"x":1,"y":2,"c":1},{"x":5,"y":1,"c":3},{"x":3,"y":5,"c":2},{"x":1,"y":1,"c":1},{"x":0,"y":2,"c":2},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[2,3,4,7,8,9,10],"alt":true,"spider":{"route":[7,4,1,4]},"webs":[[4,6],[1,6]],"opt":10},{"pegs":[{"x":3,"y":7,"c":3},{"x":3,"y":3,"c":1},{"x":3,"y":1,"c":3},{"x":3,"y":2,"c":0},{"x":4,"y":2,"c":2},{"x":4,"y":1,"c":0},{"x":5,"y":2,"c":3},{"x":5,"y":1,"c":1},{"x":1,"y":1,"c":3},{"x":0,"y":4,"c":2},{"x":3,"y":5,"c":3},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":8,"stars":[3,4,5,6,7,9,10],"alt":true,"spider":{"route":[4,3,1,3]},"opt":11},{"pegs":[{"x":4,"y":8,"c":3},{"x":3,"y":7,"c":0},{"x":4,"y":4,"c":0},{"x":3,"y":6,"c":0},{"x":5,"y":2,"c":3},{"x":4,"y":7,"c":1},{"x":0,"y":4,"c":2},{"x":1,"y":5,"c":0},{"x":1,"y":2,"c":2},{"x":0,"y":6,"c":2},{"x":2,"y":1,"c":3},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":9,"stars":[1,3,6,8,9,10],"alt":true,"spider":{"route":[3,1,5,1]},"cat":true,"opt":10},{"pegs":[{"x":3,"y":8,"c":0},{"x":2,"y":7,"c":2},{"x":5,"y":5,"c":0},{"x":4,"y":6,"c":3},{"x":1,"y":4,"c":0},{"x":2,"y":5,"c":0},{"x":3,"y":5,"c":3},{"x":2,"y":2,"c":1},{"x":1,"y":5,"c":1},{"x":3,"y":3,"c":0},{"x":1,"y":1,"c":0},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,4,5,6,10],"alt":true,"webs":[[5,7]],"opt":10},{"pegs":[{"x":3,"y":8,"c":3},{"x":5,"y":1,"c":1},{"x":1,"y":3,"c":3},{"x":2,"y":2,"c":3},{"x":5,"y":6,"c":0},{"x":4,"y":1,"c":3},{"x":3,"y":3,"c":2},{"x":3,"y":5,"c":1},{"x":5,"y":4,"c":2},{"x":3,"y":4,"c":3},{"x":4,"y":3,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[2,5,7,8,9,10],"alt":true,"spider":{"route":[4,8,10,8]},"cat":true,"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":0,"y":2,"c":2},{"x":1,"y":5,"c":0},{"x":1,"y":1,"c":0},{"x":2,"y":2,"c":1},{"x":4,"y":6,"c":0},{"x":3,"y":4,"c":3},{"x":2,"y":4,"c":2},{"x":4,"y":5,"c":2},{"x":0,"y":1,"c":0},{"x":0,"y":4,"c":3},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[2,5,6,7,9,10],"alt":true,"spider":{"route":[1,9,3,9]},"webs":[[1,4]],"cat":true,"opt":10},{"pegs":[{"x":0,"y":8,"c":2},{"x":3,"y":4,"c":3},{"x":5,"y":6,"c":1},{"x":5,"y":4,"c":2},{"x":5,"y":3,"c":0},{"x":1,"y":5,"c":1},{"x":1,"y":7,"c":2},{"x":5,"y":7,"c":0},{"x":3,"y":3,"c":3},{"x":2,"y":2,"c":0},{"x":5,"y":1,"c":0},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":9,"stars":[2,4,5,8,9,10],"alt":true,"spider":{"route":[4,3,1,3]},"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":3,"y":4,"c":1},{"x":5,"y":7,"c":2},{"x":2,"y":3,"c":2},{"x":4,"y":2,"c":0},{"x":4,"y":4,"c":3},{"x":0,"y":5,"c":2},{"x":5,"y":6,"c":1},{"x":0,"y":3,"c":0},{"x":3,"y":3,"c":3},{"x":0,"y":7,"c":2},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[1,3,4,5,6,9],"alt":true,"spider":{"route":[1,5,9,5]},"webs":[[6,10]],"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":1},{"x":2,"y":4,"c":3},{"x":0,"y":3,"c":3},{"x":0,"y":5,"c":3},{"x":3,"y":7,"c":1},{"x":3,"y":2,"c":0},{"x":2,"y":1,"c":0},{"x":1,"y":1,"c":1},{"x":3,"y":5,"c":2},{"x":1,"y":3,"c":3},{"x":3,"y":6,"c":0},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[1,3,5,6,7,9],"alt":true,"spider":{"route":[2,9,1,9]},"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":3},{"x":4,"y":7,"c":2},{"x":1,"y":4,"c":3},{"x":3,"y":7,"c":3},{"x":0,"y":3,"c":1},{"x":1,"y":2,"c":1},{"x":2,"y":6,"c":0},{"x":4,"y":2,"c":3},{"x":3,"y":6,"c":3},{"x":5,"y":3,"c":2},{"x":4,"y":4,"c":1},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[3,4,5,7,8,9],"alt":true,"spider":{"route":[1,3,8,3]},"webs":[[5,7]],"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":4,"y":5,"c":1},{"x":2,"y":1,"c":1},{"x":0,"y":2,"c":1},{"x":1,"y":5,"c":3},{"x":2,"y":2,"c":1},{"x":3,"y":7,"c":2},{"x":5,"y":1,"c":1},{"x":2,"y":5,"c":0},{"x":5,"y":5,"c":0},{"x":1,"y":4,"c":3},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[3,4,5,7,8,9],"alt":true,"cat":true,"opt":10},{"pegs":[{"x":3,"y":8,"c":0},{"x":0,"y":5,"c":1},{"x":1,"y":3,"c":0},{"x":4,"y":5,"c":2},{"x":1,"y":1,"c":3},{"x":4,"y":1,"c":0},{"x":0,"y":3,"c":3},{"x":3,"y":1,"c":0},{"x":4,"y":2,"c":3},{"x":2,"y":2,"c":1},{"x":5,"y":4,"c":2},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[4,5,6,7,8,10],"alt":true,"spider":{"route":[7,5,8,5]},"webs":[[8,10]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":2},{"x":4,"y":5,"c":1},{"x":1,"y":1,"c":1},{"x":0,"y":2,"c":2},{"x":3,"y":6,"c":0},{"x":4,"y":7,"c":0},{"x":1,"y":3,"c":0},{"x":1,"y":2,"c":1},{"x":0,"y":6,"c":3},{"x":2,"y":7,"c":0},{"x":0,"y":5,"c":1},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,4,6,7,9],"alt":true,"spider":{"route":[1,4,5,4]},"opt":11},{"pegs":[{"x":3,"y":8,"c":2},{"x":2,"y":6,"c":1},{"x":1,"y":4,"c":1},{"x":0,"y":1,"c":3},{"x":1,"y":5,"c":3},{"x":2,"y":1,"c":2},{"x":3,"y":6,"c":0},{"x":2,"y":5,"c":0},{"x":2,"y":3,"c":2},{"x":5,"y":7,"c":0},{"x":4,"y":3,"c":0},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":9,"stars":[2,5,6,7,8,9],"alt":true,"spider":{"route":[4,2,7,2]},"webs":[[2,5]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":0,"y":7,"c":1},{"x":1,"y":6,"c":0},{"x":5,"y":6,"c":3},{"x":0,"y":2,"c":3},{"x":5,"y":2,"c":0},{"x":2,"y":7,"c":1},{"x":2,"y":2,"c":0},{"x":3,"y":3,"c":3},{"x":0,"y":6,"c":3},{"x":4,"y":4,"c":2},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[1,4,5,6,8,9],"alt":true,"spider":{"route":[10,8,7,8]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":3},{"x":1,"y":4,"c":2},{"x":3,"y":1,"c":0},{"x":5,"y":1,"c":1},{"x":1,"y":1,"c":1},{"x":0,"y":2,"c":3},{"x":3,"y":3,"c":1},{"x":1,"y":3,"c":2},{"x":1,"y":2,"c":2},{"x":3,"y":2,"c":1},{"x":2,"y":3,"c":0},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[1,2,3,4,6,9],"alt":true,"spider":{"route":[5,8,4,8]},"webs":[[2,10]],"opt":10},{"pegs":[{"x":1,"y":8,"c":2},{"x":4,"y":4,"c":2},{"x":3,"y":4,"c":0},{"x":1,"y":4,"c":3},{"x":3,"y":3,"c":2},{"x":1,"y":6,"c":0},{"x":1,"y":2,"c":3},{"x":3,"y":6,"c":1},{"x":5,"y":7,"c":0},{"x":2,"y":5,"c":2},{"x":1,"y":7,"c":1},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[3,4,6,7,8,10],"alt":true,"spider":{"route":[5,10,7,10]},"cat":true,"opt":10},{"pegs":[{"x":5,"y":8,"c":2},{"x":5,"y":2,"c":0},{"x":2,"y":6,"c":0},{"x":5,"y":1,"c":1},{"x":1,"y":5,"c":2},{"x":2,"y":3,"c":3},{"x":3,"y":7,"c":0},{"x":3,"y":2,"c":1},{"x":2,"y":5,"c":2},{"x":4,"y":3,"c":0},{"x":3,"y":1,"c":2},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":9,"stars":[1,3,4,6,8,10],"alt":true,"webs":[[9,10]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":0},{"x":3,"y":3,"c":0},{"x":1,"y":2,"c":1},{"x":1,"y":7,"c":0},{"x":0,"y":5,"c":2},{"x":5,"y":7,"c":0},{"x":3,"y":7,"c":1},{"x":5,"y":1,"c":1},{"x":3,"y":1,"c":3},{"x":5,"y":5,"c":1},{"x":4,"y":1,"c":1},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[1,3,5,6,7,10],"alt":true,"spider":{"route":[9,5,6,5]},"opt":10},{"pegs":[{"x":5,"y":8,"c":1},{"x":0,"y":2,"c":0},{"x":5,"y":4,"c":1},{"x":3,"y":1,"c":3},{"x":3,"y":5,"c":2},{"x":1,"y":6,"c":3},{"x":1,"y":7,"c":1},{"x":1,"y":4,"c":3},{"x":2,"y":1,"c":0},{"x":5,"y":2,"c":0},{"x":0,"y":4,"c":3},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[2,4,5,7,8,10],"alt":true,"spider":{"route":[7,10,1,10]},"webs":[[2,4]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":1,"y":2,"c":3},{"x":2,"y":3,"c":0},{"x":0,"y":3,"c":1},{"x":5,"y":7,"c":3},{"x":0,"y":2,"c":0},{"x":1,"y":7,"c":2},{"x":5,"y":2,"c":0},{"x":1,"y":1,"c":0},{"x":3,"y":1,"c":3},{"x":5,"y":1,"c":3},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[1,2,3,4,7,8],"alt":true,"spider":{"route":[8,1,5,1]},"cat":true,"opt":10},{"pegs":[{"x":4,"y":8,"c":0},{"x":4,"y":6,"c":1},{"x":4,"y":7,"c":1},{"x":2,"y":3,"c":2},{"x":1,"y":3,"c":1},{"x":5,"y":6,"c":3},{"x":3,"y":3,"c":1},{"x":1,"y":2,"c":3},{"x":1,"y":6,"c":0},{"x":2,"y":6,"c":1},{"x":4,"y":1,"c":3},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[1,3,4,7,8,9],"alt":true,"spider":{"route":[5,1,2,1]},"webs":[[6,9]],"opt":11},{"pegs":[{"x":4,"y":8,"c":2},{"x":1,"y":1,"c":2},{"x":2,"y":3,"c":0},{"x":4,"y":3,"c":3},{"x":3,"y":3,"c":0},{"x":4,"y":6,"c":0},{"x":1,"y":6,"c":1},{"x":2,"y":2,"c":1},{"x":3,"y":4,"c":3},{"x":4,"y":4,"c":0},{"x":0,"y":6,"c":3},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,4,6,7,9],"alt":true,"spider":{"route":[5,9,3,9]},"cat":true,"opt":11},{"pegs":[{"x":1,"y":8,"c":1},{"x":5,"y":2,"c":0},{"x":1,"y":6,"c":1},{"x":2,"y":4,"c":2},{"x":0,"y":1,"c":3},{"x":3,"y":3,"c":1},{"x":5,"y":3,"c":1},{"x":4,"y":3,"c":1},{"x":3,"y":7,"c":0},{"x":5,"y":6,"c":3},{"x":5,"y":7,"c":3},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[3,4,6,7,8,10],"alt":true,"spider":{"route":[5,7,6,7]},"webs":[[6,9]],"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":3},{"x":3,"y":1,"c":2},{"x":1,"y":1,"c":3},{"x":1,"y":5,"c":3},{"x":4,"y":7,"c":3},{"x":0,"y":1,"c":0},{"x":3,"y":5,"c":1},{"x":4,"y":4,"c":2},{"x":1,"y":6,"c":3},{"x":3,"y":2,"c":0},{"x":1,"y":7,"c":3},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":6,"rows":9,"stars":[1,3,4,5,7,10],"alt":true,"opt":9},{"pegs":[{"x":5,"y":8,"c":0},{"x":1,"y":2,"c":2},{"x":5,"y":1,"c":3},{"x":1,"y":4,"c":1},{"x":1,"y":6,"c":2},{"x":2,"y":6,"c":0},{"x":1,"y":3,"c":2},{"x":3,"y":6,"c":3},{"x":2,"y":5,"c":1},{"x":5,"y":3,"c":3},{"x":4,"y":2,"c":0},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":6,"rows":9,"stars":[1,2,4,6,7,10],"alt":true,"spider":{"route":[10,2,9,2]},"webs":[[3,7]],"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":3},{"x":1,"y":2,"c":3},{"x":0,"y":3,"c":3},{"x":2,"y":2,"c":0},{"x":1,"y":7,"c":0},{"x":2,"y":7,"c":3},{"x":0,"y":5,"c":2},{"x":1,"y":3,"c":3},{"x":5,"y":2,"c":1},{"x":3,"y":7,"c":2},{"x":4,"y":3,"c":1},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":6,"rows":9,"stars":[1,2,4,7,8,9],"alt":true,"spider":{"route":[1,3,7,3]},"cat":true,"opt":10},{"pegs":[{"x":4,"y":8,"c":2},{"x":3,"y":2,"c":0},{"x":0,"y":4,"c":0},{"x":4,"y":3,"c":1},{"x":1,"y":5,"c":3},{"x":5,"y":4,"c":0},{"x":4,"y":5,"c":2},{"x":0,"y":6,"c":1},{"x":3,"y":7,"c":1},{"x":0,"y":1,"c":0},{"x":1,"y":7,"c":0},{"x":4,"y":4,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,3,5,7,9,11],"alt":true,"spider":{"route":[4,2,7,2]},"webs":[[8,11]],"opt":11},{"pegs":[{"x":0,"y":8,"c":3},{"x":5,"y":1,"c":1},{"x":4,"y":5,"c":0},{"x":2,"y":6,"c":3},{"x":0,"y":1,"c":2},{"x":1,"y":1,"c":1},{"x":2,"y":2,"c":3},{"x":2,"y":3,"c":1},{"x":3,"y":2,"c":1},{"x":0,"y":2,"c":1},{"x":3,"y":4,"c":0},{"x":5,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[1,2,3,4,5,8,11],"alt":true,"spider":{"route":[7,6,8,6]},"cat":true,"opt":12},{"pegs":[{"x":1,"y":8,"c":2},{"x":0,"y":5,"c":2},{"x":5,"y":5,"c":1},{"x":1,"y":1,"c":0},{"x":5,"y":1,"c":1},{"x":2,"y":3,"c":2},{"x":0,"y":6,"c":2},{"x":3,"y":1,"c":1},{"x":0,"y":3,"c":1},{"x":4,"y":3,"c":3},{"x":3,"y":6,"c":1},{"x":1,"y":2,"c":3},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[2,4,5,6,8,9,10],"alt":true,"spider":{"route":[3,11,5,11]},"webs":[[3,5]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":2},{"x":4,"y":4,"c":3},{"x":5,"y":7,"c":1},{"x":3,"y":5,"c":1},{"x":5,"y":6,"c":1},{"x":5,"y":5,"c":2},{"x":2,"y":2,"c":1},{"x":4,"y":2,"c":0},{"x":4,"y":1,"c":2},{"x":1,"y":7,"c":2},{"x":0,"y":7,"c":2},{"x":3,"y":7,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[1,2,5,7,8,9,10],"alt":true,"spider":{"route":[4,2,5,2]},"opt":12},{"pegs":[{"x":2,"y":8,"c":0},{"x":4,"y":7,"c":3},{"x":5,"y":5,"c":1},{"x":2,"y":6,"c":2},{"x":4,"y":6,"c":2},{"x":3,"y":2,"c":3},{"x":3,"y":3,"c":0},{"x":5,"y":4,"c":1},{"x":5,"y":7,"c":2},{"x":3,"y":5,"c":1},{"x":5,"y":3,"c":2},{"x":2,"y":3,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[2,3,4,5,6,8,10],"alt":true,"webs":[[3,4]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":3,"y":5,"c":0},{"x":0,"y":7,"c":0},{"x":2,"y":4,"c":1},{"x":2,"y":7,"c":1},{"x":0,"y":6,"c":2},{"x":1,"y":7,"c":0},{"x":1,"y":6,"c":0},{"x":5,"y":6,"c":3},{"x":4,"y":3,"c":3},{"x":3,"y":2,"c":3},{"x":5,"y":5,"c":1},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":6,"rows":9,"stars":[2,3,4,7,8,9,10],"alt":true,"spider":{"route":[4,6,2,6]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":2},{"x":5,"y":6,"c":0},{"x":3,"y":2,"c":0},{"x":4,"y":4,"c":1},{"x":0,"y":2,"c":1},{"x":1,"y":6,"c":0},{"x":2,"y":5,"c":1},{"x":1,"y":1,"c":3},{"x":1,"y":3,"c":2},{"x":3,"y":3,"c":0},{"x":0,"y":3,"c":1},{"x":4,"y":5,"c":0},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,5,6,8,9,10,11],"alt":true,"spider":{"route":[4,10,8,10]},"webs":[[6,8]],"opt":10},{"pegs":[{"x":3,"y":8,"c":0},{"x":2,"y":5,"c":0},{"x":2,"y":4,"c":1},{"x":5,"y":1,"c":2},{"x":0,"y":5,"c":1},{"x":3,"y":6,"c":0},{"x":2,"y":7,"c":2},{"x":0,"y":3,"c":2},{"x":3,"y":2,"c":2},{"x":4,"y":1,"c":3},{"x":3,"y":4,"c":2},{"x":2,"y":6,"c":3},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,3,4,5,6,7,8],"alt":true,"spider":{"route":[7,4,1,4]},"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":3},{"x":3,"y":7,"c":3},{"x":3,"y":4,"c":2},{"x":5,"y":3,"c":0},{"x":1,"y":4,"c":1},{"x":3,"y":2,"c":3},{"x":4,"y":6,"c":0},{"x":4,"y":4,"c":3},{"x":3,"y":5,"c":1},{"x":5,"y":6,"c":0},{"x":2,"y":3,"c":0},{"x":0,"y":4,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":6,"rows":9,"stars":[1,3,5,7,8,9,11],"alt":true,"spider":{"route":[6,9,1,9]},"webs":[[2,4]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":0,"y":5,"c":3},{"x":1,"y":4,"c":2},{"x":4,"y":6,"c":1},{"x":4,"y":7,"c":2},{"x":4,"y":4,"c":2},{"x":0,"y":3,"c":1},{"x":3,"y":7,"c":1},{"x":3,"y":4,"c":0},{"x":1,"y":1,"c":2},{"x":4,"y":2,"c":2},{"x":0,"y":1,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":6,"rows":9,"stars":[2,3,5,7,9,10,11],"alt":true,"spider":{"route":[10,5,8,5]},"opt":11},{"pegs":[{"x":3,"y":8,"c":1},{"x":0,"y":4,"c":0},{"x":3,"y":6,"c":1},{"x":5,"y":7,"c":3},{"x":1,"y":6,"c":3},{"x":2,"y":3,"c":2},{"x":0,"y":6,"c":2},{"x":2,"y":1,"c":0},{"x":5,"y":2,"c":2},{"x":5,"y":6,"c":2},{"x":0,"y":1,"c":3},{"x":3,"y":5,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,5,7,8,9,11],"alt":true,"spider":{"route":[8,5,7,5]},"webs":[[7,8]],"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":1},{"x":2,"y":2,"c":2},{"x":5,"y":3,"c":3},{"x":2,"y":1,"c":0},{"x":3,"y":1,"c":1},{"x":1,"y":6,"c":0},{"x":5,"y":1,"c":3},{"x":1,"y":2,"c":2},{"x":4,"y":4,"c":1},{"x":0,"y":7,"c":0},{"x":1,"y":4,"c":3},{"x":0,"y":1,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,5,7,8,9,11],"alt":true,"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":3,"y":2,"c":2},{"x":1,"y":6,"c":3},{"x":0,"y":6,"c":2},{"x":2,"y":4,"c":0},{"x":3,"y":1,"c":0},{"x":1,"y":5,"c":2},{"x":2,"y":2,"c":3},{"x":2,"y":3,"c":2},{"x":1,"y":4,"c":3},{"x":4,"y":6,"c":1},{"x":0,"y":7,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[3,5,6,7,9,10,11],"alt":true,"spider":{"route":[10,4,8,4]},"webs":[[2,10]],"opt":12},{"pegs":[{"x":0,"y":8,"c":0},{"x":0,"y":2,"c":0},{"x":1,"y":4,"c":0},{"x":1,"y":1,"c":1},{"x":0,"y":4,"c":3},{"x":3,"y":1,"c":1},{"x":1,"y":5,"c":3},{"x":1,"y":6,"c":2},{"x":3,"y":2,"c":3},{"x":1,"y":2,"c":1},{"x":4,"y":3,"c":3},{"x":3,"y":6,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":6,"rows":9,"stars":[1,3,5,6,7,8,11],"alt":true,"spider":{"route":[11,7,6,7]},"cat":true,"opt":12},{"pegs":[{"x":1,"y":8,"c":1},{"x":5,"y":6,"c":0},{"x":3,"y":6,"c":1},{"x":1,"y":6,"c":3},{"x":5,"y":2,"c":3},{"x":4,"y":1,"c":3},{"x":0,"y":1,"c":1},{"x":1,"y":1,"c":0},{"x":4,"y":3,"c":1},{"x":2,"y":1,"c":2},{"x":2,"y":6,"c":3},{"x":1,"y":5,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[1,3,5,6,7,8,10],"alt":true,"spider":{"route":[6,7,9,7]},"webs":[[1,10]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":1},{"x":0,"y":7,"c":0},{"x":5,"y":3,"c":1},{"x":2,"y":7,"c":1},{"x":1,"y":2,"c":2},{"x":1,"y":7,"c":0},{"x":2,"y":4,"c":3},{"x":5,"y":7,"c":1},{"x":4,"y":2,"c":2},{"x":1,"y":6,"c":2},{"x":1,"y":3,"c":3},{"x":3,"y":7,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,2,3,4,5,6,9],"alt":true,"spider":{"route":[5,1,9,1]},"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":3,"y":4,"c":1},{"x":1,"y":5,"c":3},{"x":0,"y":4,"c":1},{"x":3,"y":1,"c":0},{"x":5,"y":1,"c":2},{"x":4,"y":1,"c":3},{"x":2,"y":5,"c":1},{"x":0,"y":1,"c":2},{"x":1,"y":2,"c":3},{"x":5,"y":3,"c":1},{"x":2,"y":3,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":6,"rows":9,"stars":[1,3,5,7,8,9,11],"alt":true,"spider":{"route":[11,1,7,1]},"webs":[[3,9]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":2},{"x":4,"y":6,"c":2},{"x":3,"y":4,"c":2},{"x":1,"y":2,"c":0},{"x":3,"y":2,"c":0},{"x":0,"y":7,"c":1},{"x":4,"y":7,"c":1},{"x":2,"y":3,"c":2},{"x":5,"y":6,"c":3},{"x":0,"y":5,"c":2},{"x":2,"y":1,"c":0},{"x":4,"y":5,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,3,4,5,7,9,10],"alt":true,"spider":{"route":[3,7,2,7]},"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":2},{"x":5,"y":7,"c":2},{"x":1,"y":4,"c":2},{"x":2,"y":7,"c":2},{"x":0,"y":1,"c":2},{"x":1,"y":2,"c":2},{"x":5,"y":5,"c":2},{"x":2,"y":4,"c":0},{"x":0,"y":4,"c":0},{"x":1,"y":7,"c":3},{"x":1,"y":3,"c":1},{"x":0,"y":2,"c":3},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[2,3,4,6,7,8,9],"alt":true,"webs":[[5,7]],"opt":10},{"pegs":[{"x":5,"y":8,"c":1},{"x":1,"y":7,"c":1},{"x":0,"y":3,"c":1},{"x":3,"y":6,"c":1},{"x":1,"y":1,"c":3},{"x":4,"y":3,"c":0},{"x":4,"y":6,"c":2},{"x":3,"y":5,"c":2},{"x":2,"y":7,"c":3},{"x":0,"y":7,"c":1},{"x":1,"y":2,"c":1},{"x":4,"y":1,"c":2},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[2,3,4,5,8,9,10],"alt":true,"spider":{"route":[1,8,3,8]},"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":1},{"x":0,"y":5,"c":3},{"x":1,"y":5,"c":1},{"x":2,"y":7,"c":1},{"x":5,"y":6,"c":1},{"x":1,"y":2,"c":1},{"x":5,"y":4,"c":0},{"x":2,"y":1,"c":1},{"x":3,"y":6,"c":3},{"x":5,"y":7,"c":0},{"x":2,"y":3,"c":2},{"x":2,"y":5,"c":2},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[2,5,6,7,8,10,11],"alt":true,"spider":{"route":[2,1,11,1]},"webs":[[3,9]],"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":0},{"x":4,"y":5,"c":1},{"x":3,"y":6,"c":2},{"x":0,"y":2,"c":3},{"x":3,"y":5,"c":0},{"x":4,"y":7,"c":1},{"x":5,"y":1,"c":3},{"x":3,"y":1,"c":3},{"x":0,"y":6,"c":2},{"x":2,"y":6,"c":2},{"x":4,"y":1,"c":3},{"x":5,"y":5,"c":3},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":6,"rows":9,"stars":[1,2,3,6,7,9,10],"alt":true,"spider":{"route":[2,4,1,4]},"opt":11},{"pegs":[{"x":1,"y":8,"c":1},{"x":2,"y":2,"c":0},{"x":5,"y":1,"c":1},{"x":5,"y":7,"c":3},{"x":5,"y":5,"c":0},{"x":4,"y":5,"c":3},{"x":5,"y":2,"c":2},{"x":0,"y":2,"c":3},{"x":1,"y":3,"c":2},{"x":4,"y":1,"c":2},{"x":2,"y":4,"c":3},{"x":3,"y":3,"c":3},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":6,"rows":9,"stars":[4,5,6,7,9,10,11],"alt":true,"spider":{"route":[1,8,7,8]},"webs":[[6,11]],"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":0},{"x":5,"y":1,"c":3},{"x":4,"y":7,"c":3},{"x":5,"y":4,"c":2},{"x":0,"y":7,"c":0},{"x":0,"y":1,"c":3},{"x":4,"y":1,"c":1},{"x":1,"y":7,"c":2},{"x":3,"y":4,"c":2},{"x":2,"y":6,"c":3},{"x":5,"y":5,"c":0},{"x":5,"y":6,"c":3},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":6,"rows":9,"stars":[2,3,5,6,9,10,11],"alt":true,"spider":{"route":[1,6,3,6]},"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":1},{"x":0,"y":5,"c":0},{"x":1,"y":6,"c":1},{"x":0,"y":3,"c":1},{"x":2,"y":2,"c":1},{"x":4,"y":3,"c":1},{"x":3,"y":2,"c":3},{"x":5,"y":4,"c":1},{"x":5,"y":1,"c":2},{"x":0,"y":4,"c":0},{"x":3,"y":1,"c":3},{"x":1,"y":3,"c":3},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":6,"rows":9,"stars":[1,3,4,6,7,9,10],"alt":true,"spider":{"route":[1,9,3,9]},"webs":[[1,11]],"opt":10},{"pegs":[{"x":3,"y":8,"c":2},{"x":3,"y":6,"c":0},{"x":1,"y":5,"c":2},{"x":0,"y":2,"c":2},{"x":3,"y":1,"c":3},{"x":0,"y":5,"c":2},{"x":2,"y":2,"c":3},{"x":4,"y":2,"c":0},{"x":4,"y":7,"c":3},{"x":3,"y":5,"c":1},{"x":1,"y":6,"c":2},{"x":6,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,5,6,7,8,9],"alt":true,"cat":true,"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":5,"y":6,"c":3},{"x":0,"y":1,"c":0},{"x":1,"y":6,"c":3},{"x":5,"y":1,"c":2},{"x":4,"y":7,"c":3},{"x":4,"y":3,"c":1},{"x":1,"y":3,"c":2},{"x":0,"y":2,"c":3},{"x":0,"y":7,"c":3},{"x":1,"y":5,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,4,5,6,7,8,9],"alt":true,"spider":{"route":[9,3,10,3]},"webs":[[4,6]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":0},{"x":1,"y":1,"c":2},{"x":2,"y":5,"c":1},{"x":0,"y":1,"c":0},{"x":4,"y":6,"c":2},{"x":0,"y":2,"c":1},{"x":3,"y":2,"c":1},{"x":5,"y":1,"c":1},{"x":1,"y":2,"c":1},{"x":6,"y":7,"c":0},{"x":6,"y":2,"c":3},{"x":6,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,5,6,7,9,10],"alt":true,"spider":{"route":[9,4,2,4]},"opt":10},{"pegs":[{"x":0,"y":8,"c":0},{"x":2,"y":2,"c":2},{"x":1,"y":3,"c":1},{"x":3,"y":2,"c":1},{"x":5,"y":7,"c":2},{"x":5,"y":1,"c":1},{"x":4,"y":3,"c":3},{"x":0,"y":5,"c":2},{"x":1,"y":4,"c":0},{"x":5,"y":5,"c":1},{"x":3,"y":7,"c":1},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,5,6,7,9],"alt":true,"spider":{"route":[4,9,6,9]},"webs":[[9,10]],"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":1},{"x":3,"y":3,"c":3},{"x":4,"y":2,"c":2},{"x":5,"y":2,"c":0},{"x":3,"y":5,"c":1},{"x":2,"y":2,"c":3},{"x":4,"y":5,"c":1},{"x":2,"y":1,"c":3},{"x":4,"y":1,"c":3},{"x":1,"y":3,"c":2},{"x":2,"y":6,"c":2},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,4,6,7,8,9],"alt":true,"spider":{"route":[5,7,8,7]},"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":0},{"x":2,"y":7,"c":3},{"x":5,"y":2,"c":1},{"x":6,"y":1,"c":3},{"x":5,"y":7,"c":1},{"x":2,"y":2,"c":1},{"x":3,"y":3,"c":2},{"x":0,"y":2,"c":0},{"x":6,"y":3,"c":1},{"x":1,"y":7,"c":0},{"x":2,"y":1,"c":1},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,4,6,7,9],"alt":true,"spider":{"route":[4,1,9,1]},"webs":[[6,8]],"opt":10},{"pegs":[{"x":1,"y":8,"c":0},{"x":0,"y":5,"c":2},{"x":3,"y":2,"c":0},{"x":4,"y":5,"c":1},{"x":1,"y":4,"c":2},{"x":3,"y":1,"c":0},{"x":0,"y":4,"c":2},{"x":3,"y":4,"c":3},{"x":2,"y":2,"c":3},{"x":5,"y":2,"c":1},{"x":1,"y":6,"c":2},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,6,7,9,10],"alt":true,"spider":{"route":[7,3,2,3]},"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":0},{"x":0,"y":1,"c":3},{"x":5,"y":6,"c":0},{"x":6,"y":6,"c":2},{"x":0,"y":6,"c":3},{"x":4,"y":7,"c":1},{"x":2,"y":5,"c":0},{"x":1,"y":6,"c":0},{"x":6,"y":1,"c":3},{"x":4,"y":1,"c":0},{"x":3,"y":1,"c":2},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,4,6,7,8,9],"alt":true,"webs":[[8,10]],"cat":true,"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":1,"y":3,"c":3},{"x":2,"y":6,"c":2},{"x":4,"y":4,"c":0},{"x":4,"y":7,"c":2},{"x":5,"y":7,"c":2},{"x":0,"y":1,"c":2},{"x":4,"y":2,"c":0},{"x":3,"y":1,"c":1},{"x":4,"y":1,"c":1},{"x":6,"y":4,"c":2},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,5,6,9,10],"alt":true,"spider":{"route":[10,3,7,3]},"opt":10},{"pegs":[{"x":5,"y":8,"c":0},{"x":1,"y":4,"c":3},{"x":1,"y":7,"c":3},{"x":3,"y":7,"c":3},{"x":6,"y":5,"c":0},{"x":6,"y":6,"c":1},{"x":0,"y":5,"c":0},{"x":0,"y":3,"c":2},{"x":2,"y":5,"c":2},{"x":0,"y":4,"c":3},{"x":1,"y":6,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,5,6,7,8,10],"alt":true,"spider":{"route":[7,9,1,9]},"webs":[[2,8]],"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":3},{"x":5,"y":6,"c":2},{"x":5,"y":5,"c":2},{"x":1,"y":7,"c":3},{"x":0,"y":4,"c":2},{"x":2,"y":7,"c":2},{"x":0,"y":7,"c":0},{"x":3,"y":1,"c":1},{"x":6,"y":6,"c":1},{"x":4,"y":1,"c":3},{"x":6,"y":3,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,7],"alt":true,"spider":{"route":[3,5,6,5]},"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":3,"y":6,"c":2},{"x":3,"y":5,"c":3},{"x":0,"y":2,"c":1},{"x":0,"y":6,"c":0},{"x":2,"y":1,"c":1},{"x":5,"y":4,"c":0},{"x":4,"y":1,"c":1},{"x":2,"y":6,"c":2},{"x":6,"y":1,"c":2},{"x":1,"y":4,"c":3},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,5,7,8,9],"alt":true,"spider":{"route":[6,2,1,2]},"webs":[[2,10]],"opt":11},{"pegs":[{"x":6,"y":8,"c":3},{"x":4,"y":5,"c":3},{"x":6,"y":3,"c":1},{"x":3,"y":6,"c":1},{"x":0,"y":4,"c":2},{"x":3,"y":1,"c":1},{"x":3,"y":7,"c":1},{"x":0,"y":1,"c":3},{"x":4,"y":3,"c":0},{"x":1,"y":4,"c":3},{"x":4,"y":7,"c":2},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,5,6,7,8,9],"alt":true,"spider":{"route":[3,6,10,6]},"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":0},{"x":6,"y":6,"c":0},{"x":4,"y":6,"c":3},{"x":5,"y":1,"c":2},{"x":1,"y":4,"c":1},{"x":4,"y":3,"c":3},{"x":5,"y":3,"c":2},{"x":0,"y":4,"c":3},{"x":6,"y":1,"c":0},{"x":4,"y":2,"c":3},{"x":4,"y":7,"c":2},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,4,5,6,7,9,10],"alt":true,"spider":{"route":[9,5,6,5]},"webs":[[3,5]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":2},{"x":1,"y":7,"c":2},{"x":5,"y":5,"c":0},{"x":4,"y":3,"c":1},{"x":3,"y":4,"c":1},{"x":5,"y":7,"c":2},{"x":1,"y":3,"c":1},{"x":2,"y":1,"c":3},{"x":2,"y":4,"c":1},{"x":5,"y":4,"c":3},{"x":2,"y":3,"c":1},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,5,6,7,9,10],"alt":true,"opt":10},{"pegs":[{"x":4,"y":8,"c":2},{"x":6,"y":1,"c":0},{"x":6,"y":3,"c":1},{"x":0,"y":4,"c":0},{"x":3,"y":1,"c":0},{"x":0,"y":1,"c":0},{"x":6,"y":4,"c":0},{"x":4,"y":2,"c":1},{"x":4,"y":5,"c":2},{"x":0,"y":7,"c":3},{"x":3,"y":2,"c":2},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,4,5,6,7,8,9],"alt":true,"spider":{"route":[10,4,7,4]},"webs":[[1,4]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":2},{"x":0,"y":3,"c":1},{"x":3,"y":1,"c":2},{"x":5,"y":6,"c":2},{"x":6,"y":1,"c":0},{"x":0,"y":2,"c":3},{"x":2,"y":2,"c":0},{"x":0,"y":6,"c":3},{"x":3,"y":5,"c":0},{"x":1,"y":3,"c":0},{"x":0,"y":5,"c":1},{"x":5,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,4,5,7,8,9,10],"alt":true,"spider":{"route":[9,1,5,1]},"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":3},{"x":1,"y":2,"c":0},{"x":4,"y":3,"c":3},{"x":3,"y":5,"c":2},{"x":2,"y":1,"c":1},{"x":0,"y":7,"c":0},{"x":0,"y":3,"c":1},{"x":6,"y":6,"c":3},{"x":1,"y":6,"c":2},{"x":5,"y":7,"c":3},{"x":1,"y":3,"c":0},{"x":2,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,7,8,9,10],"alt":true,"spider":{"route":[5,8,3,8]},"webs":[[2,3]],"opt":11},{"pegs":[{"x":4,"y":8,"c":0},{"x":4,"y":2,"c":0},{"x":5,"y":2,"c":3},{"x":4,"y":4,"c":0},{"x":3,"y":1,"c":1},{"x":4,"y":3,"c":3},{"x":0,"y":6,"c":1},{"x":5,"y":6,"c":2},{"x":1,"y":5,"c":2},{"x":3,"y":6,"c":0},{"x":1,"y":1,"c":1},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,5,6,9,10],"alt":true,"spider":{"route":[4,1,2,1]},"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":3,"y":5,"c":1},{"x":1,"y":6,"c":2},{"x":4,"y":3,"c":2},{"x":5,"y":2,"c":3},{"x":4,"y":7,"c":1},{"x":5,"y":4,"c":1},{"x":0,"y":2,"c":1},{"x":6,"y":3,"c":3},{"x":0,"y":6,"c":0},{"x":2,"y":2,"c":0},{"x":4,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,4,5,6,9,10],"alt":true,"spider":{"route":[2,9,1,9]},"webs":[[3,8]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":2},{"x":5,"y":4,"c":3},{"x":2,"y":2,"c":2},{"x":2,"y":3,"c":0},{"x":5,"y":6,"c":2},{"x":5,"y":3,"c":1},{"x":6,"y":6,"c":2},{"x":0,"y":3,"c":3},{"x":3,"y":4,"c":2},{"x":1,"y":2,"c":3},{"x":4,"y":2,"c":1},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,4,5,7,8,9,10],"alt":true,"spider":{"route":[9,2,3,2]},"opt":10},{"pegs":[{"x":1,"y":8,"c":3},{"x":4,"y":5,"c":2},{"x":1,"y":7,"c":1},{"x":3,"y":3,"c":3},{"x":5,"y":1,"c":1},{"x":6,"y":2,"c":2},{"x":2,"y":1,"c":3},{"x":0,"y":1,"c":3},{"x":2,"y":4,"c":1},{"x":1,"y":3,"c":0},{"x":0,"y":7,"c":3},{"x":0,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[1,3,4,6,7,9,10],"alt":true,"webs":[[3,9]],"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":2},{"x":6,"y":1,"c":1},{"x":5,"y":1,"c":0},{"x":0,"y":3,"c":3},{"x":1,"y":3,"c":2},{"x":2,"y":5,"c":3},{"x":6,"y":6,"c":1},{"x":1,"y":4,"c":3},{"x":5,"y":6,"c":1},{"x":5,"y":5,"c":0},{"x":0,"y":1,"c":2},{"x":1,"y":0,"c":0}],"goal":11,"goalColor":1,"cols":7,"rows":9,"stars":[3,4,5,6,7,9,10],"alt":true,"spider":{"route":[8,6,9,6]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":2},{"x":5,"y":6,"c":3},{"x":3,"y":5,"c":2},{"x":2,"y":7,"c":0},{"x":6,"y":5,"c":0},{"x":2,"y":3,"c":3},{"x":6,"y":1,"c":0},{"x":5,"y":2,"c":1},{"x":4,"y":7,"c":2},{"x":6,"y":3,"c":0},{"x":6,"y":2,"c":0},{"x":6,"y":0,"c":0}],"goal":11,"goalColor":0,"cols":7,"rows":9,"stars":[1,3,4,5,7,9,10],"alt":true,"spider":{"route":[8,1,4,1]},"webs":[[1,3]],"opt":11},{"pegs":[{"x":3,"y":8,"c":1},{"x":0,"y":3,"c":3},{"x":4,"y":2,"c":2},{"x":0,"y":2,"c":2},{"x":3,"y":1,"c":0},{"x":0,"y":1,"c":1},{"x":1,"y":4,"c":3},{"x":2,"y":4,"c":2},{"x":6,"y":2,"c":2},{"x":1,"y":2,"c":0},{"x":1,"y":5,"c":2},{"x":3,"y":0,"c":0}],"goal":11,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,4,6,7,9,10],"alt":true,"spider":{"route":[1,3,5,3]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":1},{"x":4,"y":3,"c":0},{"x":1,"y":5,"c":1},{"x":1,"y":4,"c":1},{"x":2,"y":7,"c":3},{"x":3,"y":7,"c":3},{"x":6,"y":1,"c":1},{"x":1,"y":2,"c":0},{"x":0,"y":2,"c":0},{"x":1,"y":1,"c":2},{"x":2,"y":6,"c":1},{"x":0,"y":6,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,6,9,10,11],"alt":true,"spider":{"route":[9,7,8,7]},"webs":[[2,8]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":1},{"x":0,"y":6,"c":1},{"x":1,"y":2,"c":0},{"x":5,"y":5,"c":1},{"x":2,"y":1,"c":1},{"x":6,"y":7,"c":3},{"x":0,"y":7,"c":1},{"x":2,"y":4,"c":3},{"x":2,"y":7,"c":1},{"x":5,"y":7,"c":2},{"x":2,"y":5,"c":0},{"x":1,"y":6,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,3,4,6,7,8,9,10],"alt":true,"spider":{"route":[4,2,7,2]},"opt":12},{"pegs":[{"x":3,"y":8,"c":3},{"x":0,"y":3,"c":3},{"x":5,"y":2,"c":3},{"x":1,"y":7,"c":0},{"x":1,"y":2,"c":1},{"x":6,"y":3,"c":2},{"x":5,"y":7,"c":0},{"x":4,"y":7,"c":1},{"x":6,"y":4,"c":2},{"x":6,"y":5,"c":0},{"x":6,"y":6,"c":3},{"x":5,"y":3,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,9,11],"alt":true,"spider":{"route":[11,2,5,2]},"webs":[[3,7]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":0},{"x":3,"y":3,"c":3},{"x":6,"y":5,"c":0},{"x":0,"y":7,"c":1},{"x":4,"y":5,"c":2},{"x":1,"y":7,"c":1},{"x":1,"y":2,"c":1},{"x":6,"y":4,"c":2},{"x":3,"y":5,"c":3},{"x":3,"y":6,"c":2},{"x":5,"y":7,"c":1},{"x":1,"y":1,"c":0},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,6,7,9,11],"alt":true,"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":3},{"x":0,"y":4,"c":3},{"x":0,"y":6,"c":0},{"x":6,"y":3,"c":0},{"x":3,"y":6,"c":0},{"x":1,"y":2,"c":3},{"x":5,"y":5,"c":1},{"x":1,"y":7,"c":3},{"x":1,"y":1,"c":0},{"x":2,"y":5,"c":0},{"x":3,"y":3,"c":2},{"x":4,"y":7,"c":3},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[2,5,6,7,8,9,10,11],"alt":true,"spider":{"route":[5,8,10,8]},"webs":[[1,10]],"opt":11},{"pegs":[{"x":1,"y":8,"c":1},{"x":3,"y":4,"c":3},{"x":5,"y":4,"c":1},{"x":3,"y":1,"c":2},{"x":0,"y":1,"c":0},{"x":4,"y":1,"c":0},{"x":6,"y":1,"c":3},{"x":3,"y":3,"c":1},{"x":6,"y":4,"c":3},{"x":2,"y":6,"c":3},{"x":4,"y":7,"c":3},{"x":3,"y":5,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,6,9,10,11],"alt":true,"spider":{"route":[6,5,3,5]},"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":1},{"x":6,"y":2,"c":1},{"x":1,"y":1,"c":2},{"x":4,"y":3,"c":3},{"x":4,"y":6,"c":3},{"x":1,"y":4,"c":2},{"x":4,"y":2,"c":0},{"x":2,"y":4,"c":3},{"x":1,"y":6,"c":0},{"x":3,"y":1,"c":3},{"x":3,"y":2,"c":2},{"x":4,"y":5,"c":3},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,9,11],"alt":true,"spider":{"route":[10,6,3,6]},"webs":[[1,3]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":3},{"x":3,"y":1,"c":3},{"x":4,"y":5,"c":1},{"x":4,"y":6,"c":0},{"x":4,"y":3,"c":3},{"x":1,"y":7,"c":3},{"x":5,"y":1,"c":2},{"x":0,"y":7,"c":3},{"x":5,"y":6,"c":1},{"x":2,"y":3,"c":2},{"x":6,"y":7,"c":1},{"x":2,"y":7,"c":1},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,7,8],"alt":true,"spider":{"route":[2,3,8,3]},"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":1,"y":2,"c":1},{"x":4,"y":4,"c":0},{"x":1,"y":7,"c":2},{"x":3,"y":6,"c":1},{"x":3,"y":2,"c":3},{"x":1,"y":5,"c":2},{"x":0,"y":3,"c":1},{"x":5,"y":4,"c":0},{"x":4,"y":1,"c":3},{"x":0,"y":1,"c":3},{"x":0,"y":2,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,5,8,9,10,11],"alt":true,"spider":{"route":[8,2,4,2]},"webs":[[3,4]],"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":2},{"x":4,"y":2,"c":1},{"x":5,"y":5,"c":3},{"x":5,"y":7,"c":3},{"x":0,"y":6,"c":2},{"x":5,"y":2,"c":1},{"x":2,"y":4,"c":1},{"x":0,"y":7,"c":2},{"x":6,"y":4,"c":2},{"x":5,"y":4,"c":3},{"x":1,"y":7,"c":3},{"x":1,"y":2,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,4,5,7,9,10,11],"alt":true,"spider":{"route":[2,9,8,9]},"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":2},{"x":0,"y":7,"c":3},{"x":4,"y":1,"c":0},{"x":4,"y":7,"c":3},{"x":3,"y":1,"c":2},{"x":4,"y":4,"c":1},{"x":0,"y":4,"c":1},{"x":3,"y":5,"c":3},{"x":2,"y":2,"c":1},{"x":4,"y":3,"c":0},{"x":3,"y":2,"c":0},{"x":4,"y":6,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,5,6,7,8,9,11],"alt":true,"webs":[[5,10]],"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":3,"y":3,"c":3},{"x":2,"y":6,"c":0},{"x":3,"y":4,"c":2},{"x":0,"y":1,"c":1},{"x":6,"y":6,"c":3},{"x":2,"y":1,"c":2},{"x":2,"y":3,"c":0},{"x":2,"y":2,"c":1},{"x":5,"y":3,"c":1},{"x":3,"y":5,"c":3},{"x":3,"y":7,"c":3},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,5,6,7,8,9,11],"alt":true,"spider":{"route":[11,2,10,2]},"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":0},{"x":1,"y":7,"c":0},{"x":5,"y":5,"c":0},{"x":6,"y":2,"c":3},{"x":3,"y":6,"c":1},{"x":5,"y":7,"c":0},{"x":5,"y":6,"c":1},{"x":3,"y":2,"c":1},{"x":2,"y":3,"c":2},{"x":4,"y":3,"c":0},{"x":1,"y":3,"c":3},{"x":6,"y":6,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,7,8,9,10,11],"alt":true,"spider":{"route":[10,8,7,8]},"webs":[[4,6]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":2},{"x":2,"y":2,"c":0},{"x":6,"y":7,"c":0},{"x":3,"y":2,"c":2},{"x":0,"y":7,"c":1},{"x":3,"y":5,"c":3},{"x":1,"y":5,"c":2},{"x":6,"y":2,"c":0},{"x":1,"y":7,"c":2},{"x":6,"y":4,"c":0},{"x":0,"y":4,"c":2},{"x":3,"y":3,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,4,5,6,7,9,10,11],"alt":true,"spider":{"route":[10,6,5,6]},"opt":12},{"pegs":[{"x":4,"y":8,"c":2},{"x":4,"y":6,"c":3},{"x":6,"y":3,"c":1},{"x":4,"y":2,"c":3},{"x":1,"y":5,"c":2},{"x":3,"y":2,"c":1},{"x":0,"y":2,"c":3},{"x":3,"y":6,"c":2},{"x":3,"y":7,"c":0},{"x":4,"y":1,"c":1},{"x":2,"y":7,"c":1},{"x":3,"y":3,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[3,5,6,7,8,9,10,11],"alt":true,"spider":{"route":[5,3,9,3]},"webs":[[9,11]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":0},{"x":1,"y":6,"c":0},{"x":1,"y":1,"c":2},{"x":6,"y":1,"c":1},{"x":0,"y":6,"c":2},{"x":1,"y":7,"c":1},{"x":5,"y":2,"c":3},{"x":5,"y":6,"c":2},{"x":0,"y":7,"c":1},{"x":1,"y":2,"c":3},{"x":2,"y":2,"c":0},{"x":3,"y":1,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,5,6,7,8,9],"alt":true,"spider":{"route":[5,1,4,1]},"webs":[[2,11],[3,11]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":0,"y":1,"c":2},{"x":6,"y":1,"c":2},{"x":3,"y":2,"c":0},{"x":4,"y":1,"c":0},{"x":5,"y":1,"c":0},{"x":1,"y":4,"c":1},{"x":2,"y":7,"c":3},{"x":6,"y":2,"c":3},{"x":1,"y":6,"c":3},{"x":6,"y":6,"c":0},{"x":1,"y":7,"c":3},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,4,6,7,9,10,11],"alt":true,"spider":{"route":[9,11,7,11]},"webs":[[6,9]],"opt":12},{"pegs":[{"x":2,"y":8,"c":1},{"x":0,"y":7,"c":3},{"x":4,"y":6,"c":2},{"x":2,"y":1,"c":1},{"x":3,"y":6,"c":2},{"x":1,"y":5,"c":2},{"x":5,"y":3,"c":1},{"x":1,"y":6,"c":0},{"x":6,"y":5,"c":1},{"x":2,"y":4,"c":3},{"x":6,"y":3,"c":1},{"x":3,"y":4,"c":2},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,6,7,9,10],"alt":true,"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":2},{"x":5,"y":2,"c":0},{"x":1,"y":3,"c":1},{"x":5,"y":5,"c":1},{"x":5,"y":1,"c":2},{"x":2,"y":2,"c":2},{"x":5,"y":3,"c":0},{"x":6,"y":6,"c":0},{"x":2,"y":5,"c":3},{"x":4,"y":7,"c":3},{"x":6,"y":7,"c":3},{"x":0,"y":2,"c":2},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,3,4,5,7,8,9,11],"alt":true,"spider":{"route":[6,1,4,1]},"webs":[[6,7],[2,8]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":0},{"x":5,"y":4,"c":3},{"x":1,"y":3,"c":0},{"x":4,"y":4,"c":1},{"x":4,"y":3,"c":0},{"x":1,"y":5,"c":1},{"x":1,"y":7,"c":2},{"x":3,"y":3,"c":0},{"x":4,"y":6,"c":0},{"x":0,"y":2,"c":0},{"x":2,"y":5,"c":3},{"x":5,"y":3,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,6,7,8,9,10,11],"alt":true,"spider":{"route":[9,2,5,2]},"opt":11},{"pegs":[{"x":0,"y":8,"c":1},{"x":5,"y":5,"c":3},{"x":1,"y":1,"c":3},{"x":1,"y":4,"c":2},{"x":2,"y":2,"c":1},{"x":2,"y":7,"c":2},{"x":4,"y":4,"c":1},{"x":3,"y":3,"c":0},{"x":4,"y":5,"c":2},{"x":4,"y":2,"c":1},{"x":0,"y":2,"c":2},{"x":1,"y":6,"c":1},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,5,6,9,10,11],"alt":true,"spider":{"route":[10,2,4,2]},"webs":[[3,7]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":4,"y":3,"c":0},{"x":6,"y":1,"c":1},{"x":4,"y":2,"c":1},{"x":3,"y":1,"c":2},{"x":5,"y":5,"c":3},{"x":6,"y":4,"c":1},{"x":6,"y":3,"c":0},{"x":0,"y":6,"c":3},{"x":2,"y":6,"c":3},{"x":0,"y":1,"c":3},{"x":5,"y":6,"c":3},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,8,9,10],"alt":true,"spider":{"route":[7,6,5,6]},"webs":[[2,4],[2,6]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":2},{"x":3,"y":1,"c":3},{"x":5,"y":4,"c":2},{"x":2,"y":4,"c":1},{"x":1,"y":1,"c":1},{"x":3,"y":4,"c":1},{"x":3,"y":2,"c":0},{"x":4,"y":2,"c":2},{"x":0,"y":2,"c":3},{"x":5,"y":1,"c":2},{"x":6,"y":6,"c":2},{"x":3,"y":5,"c":0},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,5,6,8,9,10,11],"alt":true,"spider":{"route":[9,7,6,7]},"webs":[[3,4]],"opt":11},{"pegs":[{"x":3,"y":8,"c":0},{"x":4,"y":7,"c":1},{"x":3,"y":7,"c":3},{"x":6,"y":1,"c":2},{"x":1,"y":1,"c":1},{"x":4,"y":3,"c":2},{"x":5,"y":7,"c":2},{"x":0,"y":2,"c":1},{"x":2,"y":3,"c":1},{"x":5,"y":4,"c":3},{"x":2,"y":1,"c":2},{"x":5,"y":5,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,4,5,6,8,9,10],"alt":true,"spider":{"route":[8,5,9,5]},"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":2},{"x":3,"y":3,"c":3},{"x":6,"y":3,"c":3},{"x":5,"y":1,"c":0},{"x":2,"y":7,"c":1},{"x":4,"y":6,"c":3},{"x":6,"y":4,"c":2},{"x":1,"y":3,"c":0},{"x":4,"y":3,"c":1},{"x":1,"y":6,"c":1},{"x":0,"y":4,"c":2},{"x":2,"y":6,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,4,5,6,7,8,9,10],"alt":true,"webs":[[10,11],[1,11]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":2},{"x":1,"y":2,"c":3},{"x":6,"y":6,"c":1},{"x":1,"y":3,"c":3},{"x":2,"y":6,"c":0},{"x":4,"y":2,"c":0},{"x":4,"y":7,"c":0},{"x":2,"y":3,"c":3},{"x":3,"y":1,"c":2},{"x":3,"y":6,"c":0},{"x":2,"y":5,"c":2},{"x":3,"y":7,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,4,6,7,10,11],"alt":true,"spider":{"route":[3,1,7,1]},"opt":12},{"pegs":[{"x":0,"y":8,"c":1},{"x":2,"y":3,"c":2},{"x":0,"y":7,"c":2},{"x":4,"y":1,"c":0},{"x":0,"y":4,"c":3},{"x":1,"y":4,"c":3},{"x":6,"y":5,"c":2},{"x":5,"y":1,"c":1},{"x":6,"y":4,"c":3},{"x":3,"y":2,"c":1},{"x":5,"y":5,"c":0},{"x":4,"y":5,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[3,4,6,7,9,10,11],"alt":true,"spider":{"route":[7,3,9,3]},"webs":[[1,3]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":1},{"x":4,"y":1,"c":2},{"x":5,"y":3,"c":0},{"x":5,"y":2,"c":0},{"x":6,"y":2,"c":1},{"x":4,"y":6,"c":0},{"x":2,"y":7,"c":1},{"x":1,"y":3,"c":2},{"x":2,"y":6,"c":0},{"x":3,"y":2,"c":1},{"x":1,"y":7,"c":1},{"x":6,"y":6,"c":3},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,5,6,9,10,11],"alt":true,"spider":{"route":[8,6,10,6]},"webs":[[7,8],[1,4]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":3},{"x":3,"y":5,"c":3},{"x":1,"y":2,"c":0},{"x":5,"y":4,"c":3},{"x":1,"y":4,"c":0},{"x":1,"y":3,"c":2},{"x":0,"y":5,"c":0},{"x":2,"y":4,"c":3},{"x":0,"y":2,"c":1},{"x":3,"y":7,"c":3},{"x":0,"y":1,"c":0},{"x":3,"y":3,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,5,6,8,9,10],"alt":true,"spider":{"route":[5,2,8,2]},"webs":[[2,4]],"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":3,"y":5,"c":1},{"x":2,"y":2,"c":1},{"x":6,"y":2,"c":3},{"x":6,"y":1,"c":2},{"x":1,"y":2,"c":0},{"x":5,"y":2,"c":3},{"x":4,"y":5,"c":3},{"x":0,"y":5,"c":1},{"x":3,"y":6,"c":1},{"x":2,"y":6,"c":1},{"x":6,"y":4,"c":0},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,6,7,8,10],"alt":true,"spider":{"route":[1,7,9,7]},"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":1},{"x":4,"y":4,"c":0},{"x":6,"y":6,"c":1},{"x":0,"y":3,"c":3},{"x":1,"y":2,"c":0},{"x":1,"y":3,"c":1},{"x":5,"y":2,"c":0},{"x":6,"y":5,"c":3},{"x":1,"y":1,"c":0},{"x":3,"y":5,"c":2},{"x":1,"y":7,"c":2},{"x":6,"y":7,"c":3},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,6,7,8,10,11],"alt":true,"spider":{"route":[3,5,4,5]},"webs":[[9,10],[1,6]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":2},{"x":3,"y":1,"c":1},{"x":2,"y":1,"c":1},{"x":4,"y":3,"c":1},{"x":6,"y":3,"c":2},{"x":1,"y":7,"c":2},{"x":0,"y":4,"c":0},{"x":3,"y":5,"c":0},{"x":1,"y":5,"c":1},{"x":6,"y":5,"c":0},{"x":6,"y":6,"c":3},{"x":0,"y":2,"c":1},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,6,7,8,10,11],"alt":true,"opt":10},{"pegs":[{"x":2,"y":8,"c":0},{"x":0,"y":5,"c":3},{"x":6,"y":4,"c":0},{"x":2,"y":5,"c":0},{"x":0,"y":4,"c":3},{"x":5,"y":1,"c":1},{"x":4,"y":4,"c":0},{"x":1,"y":1,"c":1},{"x":0,"y":1,"c":2},{"x":1,"y":6,"c":0},{"x":2,"y":2,"c":0},{"x":5,"y":5,"c":3},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,6,10,11],"alt":true,"spider":{"route":[8,7,10,7]},"webs":[[2,5]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":0},{"x":4,"y":7,"c":0},{"x":0,"y":2,"c":0},{"x":0,"y":6,"c":0},{"x":4,"y":1,"c":2},{"x":2,"y":5,"c":1},{"x":2,"y":4,"c":3},{"x":1,"y":3,"c":0},{"x":3,"y":5,"c":1},{"x":3,"y":4,"c":2},{"x":3,"y":6,"c":1},{"x":0,"y":4,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,5,6,7,8,11],"alt":true,"spider":{"route":[1,10,8,10]},"webs":[[2,11],[9,10]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":0},{"x":3,"y":6,"c":1},{"x":0,"y":3,"c":0},{"x":2,"y":7,"c":0},{"x":6,"y":1,"c":2},{"x":4,"y":4,"c":2},{"x":5,"y":6,"c":2},{"x":3,"y":7,"c":2},{"x":5,"y":5,"c":2},{"x":0,"y":2,"c":1},{"x":4,"y":1,"c":0},{"x":2,"y":3,"c":3},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[3,4,5,6,7,8,10],"alt":true,"spider":{"route":[6,8,5,8]},"webs":[[5,11]],"opt":12},{"pegs":[{"x":0,"y":8,"c":3},{"x":4,"y":5,"c":1},{"x":1,"y":3,"c":1},{"x":3,"y":1,"c":1},{"x":4,"y":7,"c":1},{"x":6,"y":6,"c":0},{"x":1,"y":4,"c":3},{"x":3,"y":3,"c":2},{"x":5,"y":5,"c":3},{"x":3,"y":2,"c":3},{"x":0,"y":3,"c":3},{"x":6,"y":4,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,5,6,7,10,11],"alt":true,"spider":{"route":[11,8,1,8]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":0},{"x":4,"y":1,"c":3},{"x":1,"y":2,"c":3},{"x":6,"y":2,"c":3},{"x":6,"y":1,"c":1},{"x":3,"y":6,"c":2},{"x":6,"y":5,"c":0},{"x":1,"y":6,"c":3},{"x":6,"y":6,"c":1},{"x":3,"y":7,"c":1},{"x":4,"y":7,"c":3},{"x":5,"y":7,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,9],"alt":true,"spider":{"route":[8,6,11,6]},"webs":[[5,11],[7,9]],"cat":true,"opt":12},{"pegs":[{"x":1,"y":8,"c":3},{"x":0,"y":2,"c":3},{"x":3,"y":5,"c":2},{"x":2,"y":6,"c":3},{"x":4,"y":4,"c":1},{"x":2,"y":7,"c":2},{"x":4,"y":3,"c":1},{"x":5,"y":3,"c":2},{"x":6,"y":3,"c":2},{"x":6,"y":2,"c":0},{"x":3,"y":1,"c":1},{"x":3,"y":2,"c":1},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,7],"alt":true,"spider":{"route":[5,3,2,3]},"opt":11},{"pegs":[{"x":5,"y":8,"c":0},{"x":6,"y":4,"c":1},{"x":4,"y":5,"c":0},{"x":3,"y":7,"c":3},{"x":5,"y":4,"c":3},{"x":1,"y":7,"c":2},{"x":2,"y":2,"c":0},{"x":3,"y":3,"c":2},{"x":4,"y":6,"c":2},{"x":4,"y":3,"c":0},{"x":0,"y":2,"c":0},{"x":2,"y":4,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,9,10,11],"alt":true,"webs":[[1,8]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":2},{"x":5,"y":2,"c":3},{"x":0,"y":4,"c":0},{"x":0,"y":5,"c":1},{"x":1,"y":2,"c":2},{"x":1,"y":6,"c":3},{"x":2,"y":1,"c":0},{"x":0,"y":1,"c":1},{"x":3,"y":7,"c":3},{"x":1,"y":7,"c":3},{"x":2,"y":2,"c":0},{"x":0,"y":7,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,5,6,8,9,11],"alt":true,"spider":{"route":[4,10,6,10]},"webs":[[3,11],[2,11]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":3},{"x":0,"y":6,"c":0},{"x":3,"y":3,"c":0},{"x":2,"y":6,"c":0},{"x":2,"y":4,"c":2},{"x":6,"y":6,"c":2},{"x":1,"y":3,"c":1},{"x":1,"y":2,"c":1},{"x":6,"y":3,"c":2},{"x":2,"y":1,"c":1},{"x":3,"y":6,"c":3},{"x":0,"y":7,"c":0},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,4,6,7,9,11],"alt":true,"spider":{"route":[6,7,9,7]},"webs":[[2,3]],"opt":11},{"pegs":[{"x":1,"y":8,"c":1},{"x":2,"y":3,"c":2},{"x":5,"y":2,"c":2},{"x":5,"y":1,"c":2},{"x":6,"y":1,"c":3},{"x":3,"y":4,"c":2},{"x":3,"y":6,"c":1},{"x":0,"y":5,"c":0},{"x":4,"y":3,"c":1},{"x":3,"y":3,"c":1},{"x":1,"y":4,"c":2},{"x":3,"y":5,"c":1},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,6,7,8,9,10],"alt":true,"spider":{"route":[10,1,9,1]},"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":3},{"x":1,"y":7,"c":1},{"x":0,"y":7,"c":0},{"x":2,"y":2,"c":2},{"x":5,"y":6,"c":1},{"x":6,"y":3,"c":2},{"x":1,"y":5,"c":0},{"x":4,"y":6,"c":1},{"x":0,"y":2,"c":3},{"x":4,"y":2,"c":2},{"x":0,"y":4,"c":3},{"x":1,"y":1,"c":3},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[2,3,4,6,7,9,10],"alt":true,"spider":{"route":[11,3,8,3]},"webs":[[4,5],[2,6]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":1},{"x":4,"y":3,"c":2},{"x":1,"y":1,"c":1},{"x":6,"y":6,"c":0},{"x":4,"y":1,"c":3},{"x":4,"y":7,"c":0},{"x":2,"y":1,"c":1},{"x":5,"y":1,"c":0},{"x":2,"y":7,"c":1},{"x":5,"y":3,"c":1},{"x":6,"y":2,"c":0},{"x":0,"y":4,"c":2},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,5,6,7,11],"alt":true,"spider":{"route":[6,2,4,2]},"opt":10},{"pegs":[{"x":6,"y":8,"c":3},{"x":4,"y":6,"c":1},{"x":1,"y":7,"c":1},{"x":3,"y":4,"c":1},{"x":0,"y":4,"c":0},{"x":0,"y":7,"c":2},{"x":3,"y":2,"c":3},{"x":4,"y":1,"c":2},{"x":6,"y":3,"c":1},{"x":1,"y":1,"c":2},{"x":1,"y":6,"c":0},{"x":3,"y":7,"c":2},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,4,7,8,9,10,11],"alt":true,"spider":{"route":[5,2,10,2]},"webs":[[1,2]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":0},{"x":6,"y":3,"c":2},{"x":0,"y":2,"c":1},{"x":1,"y":4,"c":0},{"x":1,"y":1,"c":1},{"x":5,"y":5,"c":2},{"x":3,"y":2,"c":2},{"x":3,"y":5,"c":3},{"x":4,"y":1,"c":2},{"x":6,"y":7,"c":3},{"x":0,"y":4,"c":0},{"x":3,"y":6,"c":3},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[4,5,6,7,8,10,11],"alt":true,"webs":[[7,10],[2,3]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":3},{"x":2,"y":5,"c":1},{"x":6,"y":5,"c":1},{"x":4,"y":3,"c":0},{"x":2,"y":1,"c":1},{"x":2,"y":7,"c":0},{"x":0,"y":3,"c":2},{"x":6,"y":1,"c":0},{"x":4,"y":7,"c":3},{"x":1,"y":2,"c":0},{"x":2,"y":3,"c":1},{"x":1,"y":4,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,4,5,7,8,10,11],"alt":true,"spider":{"route":[9,4,10,4]},"webs":[[1,10]],"opt":11},{"pegs":[{"x":6,"y":8,"c":0},{"x":3,"y":7,"c":2},{"x":2,"y":3,"c":1},{"x":5,"y":1,"c":1},{"x":6,"y":3,"c":2},{"x":2,"y":1,"c":0},{"x":1,"y":5,"c":1},{"x":2,"y":2,"c":1},{"x":5,"y":3,"c":3},{"x":4,"y":4,"c":1},{"x":5,"y":2,"c":3},{"x":5,"y":6,"c":0},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,4,5,6,7,8],"alt":true,"spider":{"route":[11,1,6,1]},"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":0},{"x":1,"y":3,"c":2},{"x":0,"y":4,"c":1},{"x":1,"y":7,"c":3},{"x":0,"y":2,"c":1},{"x":6,"y":1,"c":1},{"x":6,"y":3,"c":0},{"x":5,"y":5,"c":1},{"x":6,"y":5,"c":0},{"x":3,"y":5,"c":0},{"x":6,"y":7,"c":0},{"x":0,"y":6,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[5,6,7,8,9,10,11],"alt":true,"spider":{"route":[8,7,9,7]},"webs":[[6,7],[6,8]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":3},{"x":2,"y":4,"c":0},{"x":1,"y":6,"c":0},{"x":1,"y":3,"c":0},{"x":0,"y":7,"c":3},{"x":0,"y":2,"c":2},{"x":5,"y":2,"c":2},{"x":2,"y":6,"c":0},{"x":3,"y":5,"c":3},{"x":4,"y":3,"c":0},{"x":1,"y":5,"c":1},{"x":6,"y":4,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,11],"alt":true,"spider":{"route":[6,9,1,9]},"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":5,"y":6,"c":0},{"x":0,"y":3,"c":3},{"x":2,"y":4,"c":0},{"x":5,"y":3,"c":0},{"x":1,"y":2,"c":1},{"x":0,"y":6,"c":2},{"x":5,"y":1,"c":3},{"x":1,"y":7,"c":3},{"x":4,"y":7,"c":0},{"x":3,"y":4,"c":3},{"x":6,"y":1,"c":2},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,5,6,7,9,10],"alt":true,"spider":{"route":[2,5,3,5]},"webs":[[3,6]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":1},{"x":6,"y":6,"c":3},{"x":2,"y":1,"c":0},{"x":5,"y":4,"c":3},{"x":0,"y":5,"c":3},{"x":4,"y":1,"c":3},{"x":5,"y":1,"c":1},{"x":4,"y":4,"c":1},{"x":1,"y":3,"c":1},{"x":0,"y":3,"c":2},{"x":3,"y":2,"c":0},{"x":6,"y":4,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,6,7,8,11],"alt":true,"spider":{"route":[10,2,5,2]},"webs":[[6,7],[7,10]],"cat":true,"opt":12},{"pegs":[{"x":1,"y":8,"c":2},{"x":3,"y":4,"c":3},{"x":2,"y":6,"c":1},{"x":3,"y":3,"c":1},{"x":3,"y":1,"c":3},{"x":6,"y":4,"c":2},{"x":1,"y":7,"c":3},{"x":0,"y":5,"c":3},{"x":1,"y":6,"c":3},{"x":4,"y":6,"c":3},{"x":5,"y":7,"c":2},{"x":2,"y":2,"c":0},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,3,6,7,8,9,10,11],"alt":true,"webs":[[1,8]],"opt":11},{"pegs":[{"x":0,"y":8,"c":3},{"x":2,"y":4,"c":2},{"x":3,"y":5,"c":3},{"x":0,"y":1,"c":0},{"x":5,"y":5,"c":1},{"x":4,"y":6,"c":0},{"x":1,"y":1,"c":1},{"x":3,"y":2,"c":2},{"x":1,"y":3,"c":2},{"x":4,"y":7,"c":2},{"x":2,"y":3,"c":2},{"x":6,"y":7,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,7,8,10,11],"alt":true,"spider":{"route":[8,10,1,10]},"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":0},{"x":0,"y":3,"c":2},{"x":2,"y":3,"c":0},{"x":2,"y":6,"c":0},{"x":3,"y":6,"c":1},{"x":5,"y":3,"c":0},{"x":0,"y":7,"c":2},{"x":1,"y":5,"c":0},{"x":4,"y":3,"c":3},{"x":1,"y":7,"c":2},{"x":6,"y":7,"c":3},{"x":2,"y":2,"c":2},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,5,6,8,9,10,11],"alt":true,"spider":{"route":[2,11,1,11]},"webs":[[1,7],[1,11]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":2},{"x":1,"y":7,"c":2},{"x":6,"y":6,"c":0},{"x":5,"y":6,"c":2},{"x":0,"y":3,"c":1},{"x":2,"y":3,"c":3},{"x":1,"y":3,"c":3},{"x":0,"y":5,"c":3},{"x":6,"y":3,"c":2},{"x":3,"y":1,"c":2},{"x":6,"y":7,"c":3},{"x":1,"y":1,"c":3},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,4,5,7,8,9,11],"alt":true,"spider":{"route":[5,6,4,6]},"opt":10},{"pegs":[{"x":0,"y":8,"c":3},{"x":4,"y":1,"c":3},{"x":6,"y":2,"c":0},{"x":5,"y":2,"c":0},{"x":5,"y":7,"c":0},{"x":3,"y":2,"c":1},{"x":4,"y":2,"c":0},{"x":5,"y":1,"c":3},{"x":0,"y":7,"c":2},{"x":5,"y":3,"c":2},{"x":3,"y":5,"c":0},{"x":4,"y":6,"c":2},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,4,6,7,8,9,11],"alt":true,"spider":{"route":[9,3,2,3]},"webs":[[9,11]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":1},{"x":5,"y":7,"c":2},{"x":4,"y":6,"c":2},{"x":0,"y":4,"c":1},{"x":5,"y":4,"c":3},{"x":2,"y":5,"c":0},{"x":4,"y":4,"c":0},{"x":4,"y":5,"c":0},{"x":4,"y":3,"c":0},{"x":4,"y":1,"c":0},{"x":2,"y":7,"c":3},{"x":1,"y":6,"c":1},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,5,6,7,8,11],"alt":true,"spider":{"route":[2,7,6,7]},"webs":[[8,9],[4,9]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":2},{"x":2,"y":3,"c":0},{"x":6,"y":5,"c":0},{"x":2,"y":4,"c":2},{"x":0,"y":3,"c":2},{"x":0,"y":2,"c":0},{"x":2,"y":1,"c":3},{"x":1,"y":4,"c":3},{"x":3,"y":2,"c":0},{"x":5,"y":5,"c":1},{"x":0,"y":5,"c":2},{"x":0,"y":6,"c":1},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,5,6,8,10,11],"alt":true,"spider":{"route":[10,11,7,11]},"webs":[[1,5]],"opt":12},{"pegs":[{"x":3,"y":8,"c":1},{"x":3,"y":4,"c":1},{"x":5,"y":7,"c":1},{"x":3,"y":1,"c":2},{"x":2,"y":2,"c":0},{"x":4,"y":1,"c":3},{"x":2,"y":1,"c":2},{"x":4,"y":6,"c":3},{"x":6,"y":7,"c":1},{"x":0,"y":5,"c":2},{"x":1,"y":6,"c":2},{"x":5,"y":4,"c":2},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,4,5,6,8,9,10,11],"alt":true,"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":1},{"x":2,"y":6,"c":2},{"x":1,"y":7,"c":2},{"x":4,"y":3,"c":3},{"x":5,"y":5,"c":2},{"x":1,"y":2,"c":3},{"x":4,"y":1,"c":1},{"x":5,"y":1,"c":0},{"x":6,"y":1,"c":0},{"x":1,"y":6,"c":3},{"x":3,"y":2,"c":3},{"x":2,"y":2,"c":2},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,4,5,7,9,10,11],"alt":true,"spider":{"route":[7,6,10,6]},"webs":[[5,6],[5,10]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":0},{"x":1,"y":6,"c":2},{"x":1,"y":1,"c":1},{"x":2,"y":1,"c":0},{"x":5,"y":2,"c":0},{"x":0,"y":6,"c":0},{"x":5,"y":4,"c":1},{"x":2,"y":7,"c":1},{"x":0,"y":1,"c":3},{"x":6,"y":3,"c":1},{"x":2,"y":2,"c":1},{"x":5,"y":6,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,6,8,9,10,11],"alt":true,"spider":{"route":[7,1,5,1]},"opt":11},{"pegs":[{"x":3,"y":8,"c":0},{"x":3,"y":2,"c":3},{"x":4,"y":5,"c":3},{"x":2,"y":1,"c":2},{"x":6,"y":6,"c":3},{"x":3,"y":5,"c":2},{"x":5,"y":7,"c":0},{"x":3,"y":1,"c":1},{"x":1,"y":5,"c":3},{"x":1,"y":3,"c":3},{"x":2,"y":5,"c":0},{"x":3,"y":4,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,4,5,6,7,8,11],"alt":true,"spider":{"route":[11,5,2,5]},"webs":[[3,11]],"cat":true,"opt":12},{"pegs":[{"x":0,"y":8,"c":1},{"x":0,"y":5,"c":1},{"x":2,"y":2,"c":0},{"x":5,"y":3,"c":0},{"x":3,"y":4,"c":2},{"x":4,"y":1,"c":3},{"x":5,"y":7,"c":0},{"x":1,"y":6,"c":0},{"x":4,"y":4,"c":0},{"x":2,"y":7,"c":1},{"x":1,"y":1,"c":2},{"x":4,"y":7,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[3,4,5,6,8,9,10,11],"alt":true,"spider":{"route":[11,6,9,6]},"webs":[[5,10],[2,3]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":2},{"x":2,"y":3,"c":0},{"x":5,"y":7,"c":2},{"x":0,"y":7,"c":1},{"x":0,"y":3,"c":0},{"x":1,"y":6,"c":2},{"x":0,"y":6,"c":0},{"x":6,"y":6,"c":0},{"x":6,"y":7,"c":1},{"x":5,"y":5,"c":0},{"x":3,"y":3,"c":0},{"x":4,"y":7,"c":3},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,4,5,6,7,9,10],"alt":true,"spider":{"route":[6,3,5,3]},"webs":[[1,5]],"opt":11},{"pegs":[{"x":2,"y":8,"c":3},{"x":0,"y":4,"c":1},{"x":0,"y":3,"c":2},{"x":2,"y":3,"c":2},{"x":4,"y":7,"c":3},{"x":5,"y":1,"c":3},{"x":0,"y":6,"c":1},{"x":4,"y":2,"c":0},{"x":1,"y":7,"c":1},{"x":3,"y":5,"c":3},{"x":5,"y":7,"c":3},{"x":4,"y":6,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,5,6,7,8,9],"alt":true,"spider":{"route":[1,2,3,2]},"cat":true,"opt":11},{"pegs":[{"x":1,"y":8,"c":1},{"x":4,"y":5,"c":2},{"x":1,"y":2,"c":3},{"x":0,"y":5,"c":2},{"x":5,"y":2,"c":3},{"x":6,"y":1,"c":3},{"x":2,"y":5,"c":0},{"x":4,"y":1,"c":3},{"x":0,"y":2,"c":3},{"x":3,"y":4,"c":1},{"x":6,"y":6,"c":2},{"x":2,"y":4,"c":0},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,10,11],"alt":true,"webs":[[1,10],[3,6]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":1},{"x":0,"y":4,"c":1},{"x":0,"y":6,"c":0},{"x":4,"y":2,"c":1},{"x":5,"y":1,"c":1},{"x":3,"y":4,"c":0},{"x":4,"y":1,"c":1},{"x":1,"y":4,"c":3},{"x":3,"y":7,"c":0},{"x":1,"y":2,"c":2},{"x":6,"y":6,"c":0},{"x":6,"y":3,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,4,5,6,7,8,10,11],"alt":true,"spider":{"route":[1,7,5,7]},"opt":12},{"pegs":[{"x":0,"y":8,"c":2},{"x":3,"y":2,"c":3},{"x":3,"y":5,"c":2},{"x":3,"y":3,"c":1},{"x":1,"y":2,"c":1},{"x":2,"y":2,"c":1},{"x":4,"y":7,"c":3},{"x":4,"y":6,"c":2},{"x":6,"y":7,"c":3},{"x":0,"y":7,"c":0},{"x":0,"y":4,"c":3},{"x":4,"y":4,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,4,5,6,7,10,11],"alt":true,"spider":{"route":[10,4,5,4]},"webs":[[2,3]],"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":0},{"x":0,"y":1,"c":1},{"x":5,"y":2,"c":1},{"x":2,"y":2,"c":3},{"x":3,"y":3,"c":0},{"x":1,"y":4,"c":3},{"x":6,"y":5,"c":1},{"x":1,"y":1,"c":3},{"x":2,"y":6,"c":2},{"x":6,"y":7,"c":2},{"x":5,"y":1,"c":0},{"x":6,"y":1,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,4,7,8,9,10,11],"alt":true,"spider":{"route":[10,2,11,2]},"webs":[[5,8],[4,10]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":1},{"x":3,"y":7,"c":2},{"x":6,"y":1,"c":2},{"x":5,"y":1,"c":0},{"x":4,"y":7,"c":1},{"x":2,"y":3,"c":3},{"x":1,"y":6,"c":2},{"x":5,"y":7,"c":1},{"x":2,"y":4,"c":0},{"x":0,"y":5,"c":2},{"x":4,"y":1,"c":1},{"x":5,"y":3,"c":2},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,4,6,7,8,10,11],"alt":true,"spider":{"route":[5,8,6,8]},"webs":[[5,11]],"opt":11},{"pegs":[{"x":5,"y":8,"c":2},{"x":2,"y":1,"c":3},{"x":1,"y":5,"c":2},{"x":3,"y":4,"c":0},{"x":3,"y":7,"c":1},{"x":2,"y":4,"c":1},{"x":0,"y":4,"c":2},{"x":1,"y":1,"c":3},{"x":1,"y":2,"c":2},{"x":3,"y":1,"c":1},{"x":4,"y":3,"c":0},{"x":4,"y":4,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,4,5,7,8,10,11],"alt":true,"spider":{"route":[2,5,3,5]},"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":2,"y":3,"c":2},{"x":5,"y":7,"c":3},{"x":0,"y":7,"c":0},{"x":2,"y":4,"c":2},{"x":5,"y":2,"c":2},{"x":1,"y":5,"c":3},{"x":0,"y":4,"c":1},{"x":3,"y":2,"c":1},{"x":3,"y":4,"c":3},{"x":0,"y":2,"c":1},{"x":5,"y":4,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,6,7,8,10,11],"alt":true,"spider":{"route":[4,1,8,1]},"webs":[[7,10],[5,8]],"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":0},{"x":1,"y":4,"c":0},{"x":1,"y":6,"c":0},{"x":1,"y":3,"c":3},{"x":4,"y":1,"c":3},{"x":5,"y":5,"c":1},{"x":6,"y":6,"c":2},{"x":4,"y":3,"c":0},{"x":0,"y":4,"c":1},{"x":3,"y":7,"c":0},{"x":6,"y":7,"c":0},{"x":3,"y":6,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,6,7,9,10,11],"alt":true,"opt":12},{"pegs":[{"x":1,"y":8,"c":0},{"x":6,"y":6,"c":3},{"x":6,"y":2,"c":2},{"x":2,"y":1,"c":1},{"x":0,"y":6,"c":0},{"x":2,"y":6,"c":0},{"x":1,"y":6,"c":0},{"x":1,"y":1,"c":3},{"x":4,"y":6,"c":1},{"x":0,"y":1,"c":1},{"x":5,"y":2,"c":2},{"x":4,"y":2,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,6,8,9,10],"alt":true,"spider":{"route":[10,2,11,2]},"webs":[[7,11]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":0},{"x":4,"y":3,"c":1},{"x":5,"y":2,"c":1},{"x":3,"y":1,"c":0},{"x":3,"y":4,"c":0},{"x":2,"y":3,"c":1},{"x":0,"y":2,"c":1},{"x":6,"y":4,"c":3},{"x":4,"y":1,"c":3},{"x":5,"y":3,"c":3},{"x":5,"y":1,"c":1},{"x":1,"y":1,"c":2},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,4,6,8,9,10,11],"alt":true,"spider":{"route":[3,8,10,8]},"webs":[[1,7],[3,10]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":6,"y":3,"c":3},{"x":3,"y":3,"c":2},{"x":6,"y":2,"c":3},{"x":4,"y":2,"c":3},{"x":0,"y":1,"c":3},{"x":6,"y":7,"c":1},{"x":5,"y":5,"c":0},{"x":1,"y":1,"c":3},{"x":2,"y":2,"c":2},{"x":6,"y":6,"c":2},{"x":4,"y":6,"c":2},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[4,5,6,7,8,9,10,11],"alt":true,"spider":{"route":[1,3,4,3]},"webs":[[10,11]],"opt":11},{"pegs":[{"x":0,"y":8,"c":2},{"x":0,"y":2,"c":3},{"x":4,"y":7,"c":0},{"x":2,"y":6,"c":0},{"x":1,"y":4,"c":3},{"x":0,"y":4,"c":1},{"x":3,"y":6,"c":1},{"x":1,"y":3,"c":0},{"x":4,"y":5,"c":2},{"x":4,"y":2,"c":2},{"x":3,"y":7,"c":1},{"x":2,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,5,6,7,8,9,10,11],"alt":true,"spider":{"route":[7,4,5,4]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":3},{"x":5,"y":3,"c":3},{"x":6,"y":5,"c":0},{"x":1,"y":6,"c":2},{"x":4,"y":5,"c":3},{"x":0,"y":4,"c":3},{"x":6,"y":6,"c":0},{"x":4,"y":3,"c":0},{"x":6,"y":7,"c":0},{"x":1,"y":4,"c":2},{"x":2,"y":1,"c":0},{"x":2,"y":6,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,5,7,8,9,10],"alt":true,"spider":{"route":[9,5,3,5]},"webs":[[3,5],[1,2]],"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":2},{"x":4,"y":3,"c":1},{"x":5,"y":7,"c":0},{"x":2,"y":2,"c":3},{"x":4,"y":6,"c":3},{"x":2,"y":3,"c":3},{"x":4,"y":1,"c":2},{"x":5,"y":1,"c":3},{"x":1,"y":7,"c":3},{"x":1,"y":3,"c":3},{"x":2,"y":7,"c":2},{"x":2,"y":6,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,4,5,6,8,9,10],"alt":true,"spider":{"route":[2,4,11,4]},"opt":11},{"pegs":[{"x":3,"y":8,"c":2},{"x":3,"y":5,"c":3},{"x":0,"y":4,"c":3},{"x":4,"y":2,"c":0},{"x":3,"y":3,"c":3},{"x":3,"y":4,"c":0},{"x":3,"y":1,"c":0},{"x":6,"y":6,"c":0},{"x":4,"y":6,"c":0},{"x":2,"y":5,"c":2},{"x":0,"y":3,"c":1},{"x":2,"y":1,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,3,5,6,7,9,10,11],"alt":true,"webs":[[8,9]],"cat":true,"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":1,"y":2,"c":2},{"x":1,"y":3,"c":3},{"x":6,"y":1,"c":3},{"x":5,"y":6,"c":1},{"x":4,"y":5,"c":1},{"x":0,"y":7,"c":3},{"x":5,"y":7,"c":3},{"x":0,"y":4,"c":1},{"x":3,"y":7,"c":3},{"x":1,"y":4,"c":1},{"x":3,"y":1,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,6,7,8,10],"alt":true,"spider":{"route":[7,4,5,4]},"webs":[[1,10],[5,7]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":1},{"x":0,"y":3,"c":3},{"x":5,"y":4,"c":0},{"x":2,"y":2,"c":0},{"x":6,"y":6,"c":2},{"x":3,"y":2,"c":0},{"x":6,"y":5,"c":0},{"x":3,"y":3,"c":2},{"x":1,"y":6,"c":2},{"x":3,"y":6,"c":1},{"x":6,"y":2,"c":0},{"x":2,"y":5,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,8,10],"alt":true,"spider":{"route":[8,11,9,11]},"webs":[[5,11]],"opt":12},{"pegs":[{"x":1,"y":8,"c":3},{"x":5,"y":3,"c":0},{"x":1,"y":5,"c":2},{"x":1,"y":4,"c":0},{"x":5,"y":7,"c":1},{"x":0,"y":2,"c":3},{"x":0,"y":5,"c":0},{"x":3,"y":4,"c":0},{"x":5,"y":2,"c":3},{"x":3,"y":7,"c":2},{"x":5,"y":6,"c":2},{"x":5,"y":4,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,5,6,7,9,10,11],"alt":true,"spider":{"route":[11,1,8,1]},"cat":true,"opt":11},{"pegs":[{"x":4,"y":8,"c":0},{"x":5,"y":4,"c":3},{"x":6,"y":1,"c":3},{"x":1,"y":1,"c":2},{"x":5,"y":2,"c":1},{"x":1,"y":6,"c":0},{"x":0,"y":7,"c":0},{"x":5,"y":5,"c":2},{"x":4,"y":2,"c":0},{"x":3,"y":4,"c":1},{"x":1,"y":3,"c":2},{"x":2,"y":5,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,5,6,7,8,10,11],"alt":true,"spider":{"route":[6,5,11,5]},"webs":[[2,8],[4,9]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":2},{"x":4,"y":1,"c":1},{"x":3,"y":3,"c":0},{"x":1,"y":2,"c":0},{"x":3,"y":5,"c":3},{"x":6,"y":5,"c":2},{"x":0,"y":7,"c":3},{"x":5,"y":5,"c":1},{"x":5,"y":1,"c":0},{"x":6,"y":4,"c":0},{"x":2,"y":1,"c":0},{"x":6,"y":2,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,7,8,9,11],"alt":true,"spider":{"route":[1,8,11,8]},"opt":11},{"pegs":[{"x":3,"y":8,"c":1},{"x":6,"y":1,"c":2},{"x":1,"y":3,"c":0},{"x":2,"y":5,"c":3},{"x":0,"y":5,"c":2},{"x":0,"y":2,"c":1},{"x":0,"y":7,"c":1},{"x":0,"y":1,"c":2},{"x":5,"y":6,"c":2},{"x":0,"y":4,"c":0},{"x":4,"y":1,"c":1},{"x":1,"y":5,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,7,8],"alt":true,"spider":{"route":[5,7,2,7]},"webs":[[2,11]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":2},{"x":3,"y":2,"c":1},{"x":4,"y":2,"c":0},{"x":5,"y":4,"c":3},{"x":1,"y":1,"c":3},{"x":3,"y":7,"c":2},{"x":2,"y":4,"c":3},{"x":0,"y":6,"c":3},{"x":3,"y":5,"c":1},{"x":6,"y":1,"c":3},{"x":0,"y":7,"c":2},{"x":5,"y":1,"c":1},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,8,10],"alt":true,"webs":[[3,6],[1,4]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":1},{"x":2,"y":7,"c":2},{"x":6,"y":7,"c":2},{"x":2,"y":2,"c":0},{"x":1,"y":5,"c":0},{"x":4,"y":4,"c":3},{"x":0,"y":5,"c":0},{"x":5,"y":1,"c":2},{"x":3,"y":7,"c":2},{"x":0,"y":6,"c":0},{"x":4,"y":7,"c":2},{"x":6,"y":4,"c":1},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,9,10],"alt":true,"spider":{"route":[1,8,10,8]},"webs":[[3,4]],"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":5,"y":6,"c":0},{"x":4,"y":5,"c":0},{"x":2,"y":2,"c":2},{"x":1,"y":5,"c":2},{"x":5,"y":5,"c":1},{"x":5,"y":3,"c":3},{"x":5,"y":4,"c":3},{"x":6,"y":2,"c":0},{"x":6,"y":3,"c":0},{"x":1,"y":3,"c":2},{"x":1,"y":4,"c":1},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,4,6,7,8,9,10],"alt":true,"spider":{"route":[11,4,10,4]},"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":6,"y":2,"c":3},{"x":5,"y":5,"c":2},{"x":5,"y":3,"c":2},{"x":0,"y":6,"c":0},{"x":1,"y":4,"c":3},{"x":1,"y":3,"c":0},{"x":5,"y":4,"c":1},{"x":3,"y":3,"c":3},{"x":4,"y":3,"c":2},{"x":4,"y":6,"c":2},{"x":0,"y":3,"c":1},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[3,4,5,6,7,8,9,10],"alt":true,"spider":{"route":[2,7,3,7]},"webs":[[1,7],[1,9]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":3,"y":7,"c":1},{"x":5,"y":6,"c":1},{"x":2,"y":6,"c":1},{"x":2,"y":4,"c":2},{"x":4,"y":3,"c":1},{"x":1,"y":5,"c":3},{"x":1,"y":2,"c":2},{"x":5,"y":1,"c":0},{"x":4,"y":2,"c":3},{"x":1,"y":4,"c":2},{"x":4,"y":5,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,8,11],"alt":true,"spider":{"route":[4,10,6,10]},"opt":12},{"pegs":[{"x":3,"y":8,"c":3},{"x":4,"y":7,"c":2},{"x":6,"y":6,"c":2},{"x":5,"y":1,"c":3},{"x":0,"y":3,"c":0},{"x":5,"y":2,"c":1},{"x":6,"y":4,"c":3},{"x":2,"y":6,"c":0},{"x":4,"y":1,"c":1},{"x":4,"y":2,"c":2},{"x":1,"y":5,"c":2},{"x":5,"y":3,"c":2},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,5,6,7,8,10,11],"alt":true,"spider":{"route":[11,5,3,5]},"webs":[[3,11]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":1,"y":4,"c":1},{"x":3,"y":3,"c":3},{"x":0,"y":5,"c":2},{"x":1,"y":3,"c":2},{"x":5,"y":1,"c":3},{"x":3,"y":2,"c":2},{"x":0,"y":3,"c":0},{"x":4,"y":7,"c":1},{"x":6,"y":7,"c":1},{"x":2,"y":7,"c":1},{"x":6,"y":4,"c":3},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,4,6,8,9,10,11],"alt":true,"spider":{"route":[1,4,7,4]},"webs":[[3,4],[3,10]],"cat":true,"opt":11},{"pegs":[{"x":5,"y":8,"c":3},{"x":4,"y":5,"c":1},{"x":6,"y":1,"c":0},{"x":1,"y":4,"c":2},{"x":3,"y":7,"c":3},{"x":4,"y":6,"c":1},{"x":5,"y":7,"c":0},{"x":0,"y":4,"c":1},{"x":0,"y":5,"c":1},{"x":6,"y":3,"c":0},{"x":2,"y":5,"c":3},{"x":0,"y":1,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,3,4,5,6,8,9,11],"alt":true,"webs":[[1,3]],"opt":11},{"pegs":[{"x":0,"y":8,"c":3},{"x":2,"y":2,"c":1},{"x":2,"y":1,"c":1},{"x":2,"y":4,"c":3},{"x":1,"y":1,"c":0},{"x":6,"y":7,"c":3},{"x":0,"y":3,"c":2},{"x":6,"y":3,"c":0},{"x":3,"y":1,"c":0},{"x":3,"y":7,"c":0},{"x":3,"y":3,"c":1},{"x":6,"y":2,"c":0},{"x":2,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,4,5,8,9,10,11],"alt":true,"spider":{"route":[11,7,10,7]},"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":1},{"x":0,"y":5,"c":1},{"x":6,"y":4,"c":0},{"x":0,"y":3,"c":2},{"x":6,"y":5,"c":3},{"x":1,"y":4,"c":3},{"x":0,"y":7,"c":3},{"x":5,"y":5,"c":3},{"x":2,"y":6,"c":0},{"x":2,"y":4,"c":1},{"x":1,"y":1,"c":1},{"x":0,"y":1,"c":1},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,5,6,7,9,10,11],"alt":true,"spider":{"route":[11,10,3,10]},"webs":[[7,8],[1,9]],"cat":true,"opt":11},{"pegs":[{"x":6,"y":8,"c":1},{"x":5,"y":5,"c":3},{"x":5,"y":2,"c":1},{"x":3,"y":6,"c":1},{"x":5,"y":3,"c":2},{"x":2,"y":5,"c":1},{"x":5,"y":1,"c":3},{"x":6,"y":4,"c":0},{"x":0,"y":1,"c":1},{"x":1,"y":6,"c":0},{"x":0,"y":2,"c":1},{"x":3,"y":7,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,3,4,5,8,9,10,11],"alt":true,"spider":{"route":[8,10,5,10]},"opt":11},{"pegs":[{"x":5,"y":8,"c":2},{"x":0,"y":1,"c":0},{"x":1,"y":2,"c":0},{"x":6,"y":6,"c":3},{"x":5,"y":2,"c":0},{"x":3,"y":4,"c":1},{"x":1,"y":3,"c":3},{"x":1,"y":5,"c":1},{"x":2,"y":1,"c":2},{"x":5,"y":4,"c":1},{"x":4,"y":1,"c":2},{"x":2,"y":3,"c":1},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[1,2,3,4,5,6,8,11],"alt":true,"spider":{"route":[5,11,6,11]},"webs":[[2,7]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":4,"y":1,"c":3},{"x":5,"y":1,"c":0},{"x":5,"y":7,"c":0},{"x":2,"y":4,"c":0},{"x":1,"y":5,"c":3},{"x":6,"y":6,"c":3},{"x":6,"y":1,"c":2},{"x":0,"y":5,"c":1},{"x":3,"y":1,"c":1},{"x":1,"y":3,"c":0},{"x":2,"y":6,"c":3},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[1,3,5,6,7,8,10,11],"alt":true,"spider":{"route":[11,5,8,5]},"webs":[[8,10],[9,10]],"cat":true,"opt":11},{"pegs":[{"x":0,"y":8,"c":3},{"x":1,"y":6,"c":2},{"x":0,"y":7,"c":2},{"x":6,"y":3,"c":1},{"x":3,"y":7,"c":2},{"x":3,"y":5,"c":0},{"x":6,"y":2,"c":1},{"x":2,"y":4,"c":3},{"x":0,"y":6,"c":1},{"x":0,"y":5,"c":0},{"x":6,"y":6,"c":3},{"x":5,"y":3,"c":1},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,6,7,9,11],"alt":true,"spider":{"route":[8,1,2,1]},"webs":[[5,8]],"opt":12},{"pegs":[{"x":3,"y":8,"c":0},{"x":5,"y":5,"c":0},{"x":4,"y":7,"c":1},{"x":4,"y":5,"c":0},{"x":6,"y":7,"c":1},{"x":3,"y":7,"c":2},{"x":3,"y":1,"c":0},{"x":3,"y":2,"c":1},{"x":2,"y":5,"c":0},{"x":6,"y":2,"c":2},{"x":2,"y":1,"c":0},{"x":6,"y":3,"c":3},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[3,4,5,6,8,9,10,11],"alt":true,"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":0},{"x":5,"y":6,"c":3},{"x":5,"y":3,"c":3},{"x":0,"y":1,"c":3},{"x":3,"y":1,"c":1},{"x":5,"y":4,"c":0},{"x":1,"y":5,"c":0},{"x":5,"y":7,"c":3},{"x":4,"y":7,"c":0},{"x":4,"y":6,"c":2},{"x":3,"y":3,"c":1},{"x":4,"y":1,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,4,5,6,7,8,9],"alt":true,"spider":{"route":[4,11,2,11]},"webs":[[6,10],[5,11]],"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":5,"y":4,"c":3},{"x":2,"y":6,"c":0},{"x":2,"y":1,"c":1},{"x":0,"y":6,"c":3},{"x":0,"y":7,"c":2},{"x":5,"y":2,"c":3},{"x":6,"y":1,"c":3},{"x":4,"y":1,"c":3},{"x":1,"y":6,"c":1},{"x":5,"y":5,"c":3},{"x":2,"y":4,"c":1},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,3,4,5,6,8,9,11],"alt":true,"spider":{"route":[3,8,6,8]},"opt":10},{"pegs":[{"x":3,"y":8,"c":2},{"x":5,"y":4,"c":3},{"x":2,"y":3,"c":3},{"x":5,"y":7,"c":2},{"x":0,"y":7,"c":3},{"x":4,"y":7,"c":1},{"x":5,"y":1,"c":0},{"x":1,"y":1,"c":3},{"x":2,"y":1,"c":0},{"x":1,"y":2,"c":0},{"x":1,"y":5,"c":3},{"x":6,"y":6,"c":0},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,4,5,7,8,10,11],"alt":true,"spider":{"route":[5,3,11,3]},"webs":[[1,11]],"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":0},{"x":1,"y":7,"c":2},{"x":1,"y":6,"c":2},{"x":6,"y":4,"c":3},{"x":3,"y":5,"c":3},{"x":4,"y":3,"c":2},{"x":2,"y":4,"c":0},{"x":5,"y":5,"c":0},{"x":2,"y":3,"c":0},{"x":1,"y":5,"c":3},{"x":3,"y":1,"c":1},{"x":0,"y":2,"c":3},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,3,5,7,8,9,10,11],"alt":true,"spider":{"route":[10,5,8,5]},"webs":[[10,11],[2,4]],"cat":true,"opt":12},{"pegs":[{"x":6,"y":8,"c":0},{"x":1,"y":3,"c":3},{"x":0,"y":5,"c":1},{"x":2,"y":2,"c":3},{"x":2,"y":4,"c":1},{"x":2,"y":6,"c":0},{"x":1,"y":4,"c":1},{"x":6,"y":1,"c":1},{"x":5,"y":5,"c":0},{"x":2,"y":7,"c":0},{"x":2,"y":5,"c":2},{"x":1,"y":7,"c":2},{"x":5,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,4,5,6,8,9,11],"alt":true,"spider":{"route":[11,9,5,9]},"webs":[[2,10]],"opt":11},{"pegs":[{"x":2,"y":8,"c":0},{"x":2,"y":5,"c":3},{"x":4,"y":4,"c":2},{"x":1,"y":1,"c":2},{"x":0,"y":1,"c":1},{"x":5,"y":1,"c":0},{"x":0,"y":6,"c":3},{"x":6,"y":3,"c":2},{"x":6,"y":2,"c":0},{"x":5,"y":4,"c":0},{"x":2,"y":4,"c":0},{"x":6,"y":5,"c":3},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":2,"cols":7,"rows":9,"stars":[3,5,6,7,8,9,10,11],"alt":true,"spider":{"route":[8,7,9,7]},"cat":true,"opt":12},{"pegs":[{"x":2,"y":8,"c":2},{"x":0,"y":6,"c":2},{"x":2,"y":3,"c":2},{"x":4,"y":3,"c":2},{"x":2,"y":2,"c":0},{"x":1,"y":7,"c":2},{"x":6,"y":4,"c":1},{"x":3,"y":1,"c":0},{"x":6,"y":5,"c":3},{"x":3,"y":3,"c":0},{"x":0,"y":5,"c":3},{"x":0,"y":3,"c":2},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[2,3,5,7,8,9,10,11],"alt":true,"webs":[[3,4],[1,11]],"cat":true,"opt":12},{"pegs":[{"x":4,"y":8,"c":0},{"x":1,"y":1,"c":1},{"x":4,"y":2,"c":1},{"x":0,"y":3,"c":0},{"x":4,"y":6,"c":0},{"x":5,"y":4,"c":1},{"x":2,"y":3,"c":3},{"x":4,"y":4,"c":0},{"x":6,"y":5,"c":2},{"x":3,"y":1,"c":1},{"x":5,"y":7,"c":0},{"x":1,"y":5,"c":0},{"x":3,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[2,4,5,6,7,9,10,11],"alt":true,"spider":{"route":[5,7,2,7]},"opt":11},{"pegs":[{"x":3,"y":8,"c":2},{"x":5,"y":4,"c":1},{"x":3,"y":7,"c":3},{"x":1,"y":2,"c":1},{"x":4,"y":3,"c":3},{"x":6,"y":3,"c":2},{"x":1,"y":3,"c":1},{"x":4,"y":4,"c":2},{"x":4,"y":2,"c":1},{"x":1,"y":1,"c":3},{"x":4,"y":7,"c":0},{"x":2,"y":1,"c":3},{"x":4,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,9,10],"alt":true,"spider":{"route":[5,1,7,1]},"webs":[[6,7]],"cat":true,"opt":12},{"pegs":[{"x":5,"y":8,"c":0},{"x":6,"y":2,"c":1},{"x":4,"y":4,"c":0},{"x":2,"y":1,"c":2},{"x":3,"y":5,"c":3},{"x":4,"y":1,"c":1},{"x":4,"y":2,"c":3},{"x":1,"y":7,"c":2},{"x":5,"y":6,"c":3},{"x":6,"y":6,"c":3},{"x":3,"y":7,"c":3},{"x":4,"y":5,"c":0},{"x":0,"y":0,"c":0}],"goal":12,"goalColor":3,"cols":7,"rows":9,"stars":[2,3,4,5,6,7,9,11],"alt":true,"spider":{"route":[3,5,6,5]},"webs":[[1,6],[8,10]],"cat":true,"opt":11},{"pegs":[{"x":3,"y":8,"c":2},{"x":6,"y":5,"c":3},{"x":4,"y":2,"c":1},{"x":0,"y":4,"c":2},{"x":5,"y":6,"c":0},{"x":0,"y":7,"c":1},{"x":6,"y":6,"c":2},{"x":5,"y":3,"c":2},{"x":3,"y":1,"c":3},{"x":1,"y":2,"c":3},{"x":1,"y":3,"c":2},{"x":0,"y":5,"c":2},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":0,"cols":7,"rows":9,"stars":[1,2,3,4,5,7,10,11],"alt":true,"spider":{"route":[2,7,1,7]},"webs":[[8,9]],"opt":11},{"pegs":[{"x":1,"y":8,"c":0},{"x":4,"y":1,"c":0},{"x":4,"y":7,"c":0},{"x":5,"y":3,"c":3},{"x":6,"y":5,"c":2},{"x":0,"y":3,"c":2},{"x":5,"y":4,"c":3},{"x":0,"y":7,"c":2},{"x":2,"y":6,"c":1},{"x":2,"y":3,"c":2},{"x":4,"y":2,"c":3},{"x":3,"y":1,"c":2},{"x":1,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,5,6,7,8,9,11],"alt":true,"spider":{"route":[4,6,3,6]},"cat":true,"opt":12},{"pegs":[{"x":3,"y":8,"c":3},{"x":1,"y":5,"c":0},{"x":6,"y":5,"c":1},{"x":1,"y":2,"c":3},{"x":2,"y":3,"c":0},{"x":2,"y":2,"c":3},{"x":3,"y":3,"c":0},{"x":2,"y":5,"c":2},{"x":3,"y":4,"c":1},{"x":5,"y":7,"c":1},{"x":5,"y":4,"c":3},{"x":0,"y":1,"c":2},{"x":6,"y":0,"c":0}],"goal":12,"goalColor":1,"cols":7,"rows":9,"stars":[1,2,3,4,8,9,10,11],"alt":true,"spider":{"route":[10,2,9,2]},"webs":[[2,9],[6,10]],"cat":true,"opt":12}];
+
+// ---------------------------------------------------------------- i18n
+const STR = {
+  es: {
+    tag: 'Dibuja el hilo hasta la meta', levels: 'Niveles', level: 'Nivel', moves: 'Movimientos',
+    undo: 'Deshacer', reset: 'Reiniciar', hint: 'Pista', menu: 'Menú', next: 'Siguiente', retry: 'Repetir',
+    complete: '¡Nivel completo!', thread: 'Hilo', goal: 'Meta', start: 'Inicio', how: 'Cómo se juega', ok: 'Entendido',
+    done: '¡Has completado todos los niveles disponibles! Muy pronto habrá más.', best: 'mejor posible',
+    play: 'Jugar', cont: 'Continuar · Nivel {n}', soon: 'Muy pronto, más niveles…', stat: '★ {s}  ·  Completados: {n}',
+    bestiary: 'Bichos que has conocido', bug_spider: 'Araña', bug_cat: 'Oruga', bug_web: 'Telaraña',
+    proto: 'Prototipo',
+    r1: 'Toca un clavo para llevar el hilo hasta él.',
+    r2: 'El hilo toma el color del último clavo que tocaste.',
+    r3: 'No puedes cruzar tu propio color, pero sí cruzar otros colores.',
+    r4: 'Llega a la meta con el color que pide (lo indica el símbolo del centro).',
+    cross: '¡No puedes cruzar un hilo de tu mismo color!',
+    same: 'No puedes ir a un clavo del mismo color que tu hilo.',
+    stars: 'Antes de llegar a la meta debes pasar por todas las estrellas ★.',
+    rock: 'Ese clavo está bloqueado.',
+    spider: '¡La araña está en ese clavo! Espera a que se mueva.',
+    stareaten: '¡La oruga se comió una estrella! Deshaz algún paso y planifica de nuevo.',
+    r10: 'La oruga se come el tramo más antiguo de tu hilo cada 3 movimientos. Libera cruces, pero una estrella comida ya no cuenta.',
+    web: '¡La telaraña te cierra el paso!',
+    r8: 'La araña se mueve después de cada movimiento tuyo (mira su ruta punteada). No puedes ir al clavo donde está.',
+    r9: 'Las telarañas bloquean el paso: no puedes cruzarlas.',
+    r5: 'Debes pasar por todas las estrellas ★ antes de entrar en la meta.',
+    r6: 'No puedes ir a un clavo del mismo color que tu hilo: hay que alternar colores.',
+    r7: 'Hay 4 colores: ● azul, ▲ naranja, ■ verde y ◆ rosa.',
+    worlds: ['Mundo 1 · Básico', 'Mundo 2 · Estrellas', 'Mundo 3 · Colores alternos', 'Mundo 4 · Cuatro colores', 'Mundo 5 · Maestro', 'Mundo 6 · Laberinto', 'Mundo 7 · Enredo', 'Mundo 8 · Nido', 'Mundo 9 · La reina'],
+    unlockAll: 'Desbloquear todos los niveles (modo prueba)',
+    stars_lbl: 'Estrellas',
+    goalcolor: 'La meta pide hilo {c}. Pasa antes por un clavo {c}.',
+    through: 'El hilo no puede atravesar otro clavo.',
+    visited: 'Ya has pasado por ese clavo.',
+    deadend: 'Desde aquí no hay salida. Deshaz algún paso.',
+    payTitle: 'Tus 3 niveles sin anuncios de hoy ya están', payText: 'Para jugar este nivel mira un anuncio corto o pásate a Premium.', payAd: '▶ Ver anuncio y jugar este nivel', payBuy: '⭐ Premium 2,99 €: sin anuncios nunca', payNo: 'Ahora no', plays: 'Hoy: {n}/3 niveles sin anuncios', premium: '⭐ Premium', buyBtn: '⭐ Quitar anuncios y límites · 2,99 €', buyTest: 'Compra de prueba (simulada)',
+    rechTitle: 'Recargar ayuda', rechText: 'Recarga tus pistas hasta 30 (una vez al día).', rechBtn: '🔄 Recargar a 30', rechDone: 'Ya recargaste hoy. Vuelve mañana.',
+    tg: 'Llega aquí con|hilo {c}', ts: 'Empiezas aquí', tsp: 'Araña: no puedes|ir a su clavo', tst: '¡Pasa por la ★|antes de la meta!', tcr: 'No cruces un hilo|de tu mismo color', tca: 'Oruga: come tu hilo|cada 3 movimientos', ttap: 'Toca',
+    rg: '🎯 Fíjate en el color de la meta: hay que llegar con hilo de ese color. Antes pasa por un clavo de ese color.',
+    dm: {
+      r1: 'Toca un clavo.|El hilo viaja hasta él. ¡Sigue tocando clavos!',
+      r2: 'El hilo sale de un clavo azul, así que es azul.|Al tocar el naranja, el hilo se vuelve naranja.',
+      rg: 'La meta pide hilo naranja, pero llevamos azul: ¡no vale!|Primero toca un clavo naranja.|¡Ahora sí llegamos con hilo naranja!',
+      r3: 'Dibuja el hilo de clavo en clavo.|Ahora el hilo es azul.|No puedes cruzar un hilo de tu mismo color.',
+      r8: 'No puedes ir al clavo de la araña.|La araña se mueve después de cada movimiento tuyo.|Ahora el clavo está libre.|¡A la meta!',
+      r5: 'Sin la ★ no puedes entrar en la meta.|Primero pasa por la ★.|¡Ahora sí!',
+      r10: 'Pasa por la ★ y sigue.|Sigue moviéndote…|Cada 3 movimientos la oruga se come el tramo más antiguo.|¡Una ★ comida ya no cuenta!|La meta no se abre sin la ★.',
+      r6: 'No puedes ir a un clavo de tu mismo color.|Alterna: de azul a naranja sí.|Y de naranja a verde.',
+      r9: 'Las telarañas bloquean el paso.|Rodéala por otro camino.|¡Listo!',
+      r7: 'Naranja ▲: el hilo cambia a naranja.|Verde ■: ahora verde.|Rosa ◆: el cuarto color.'
+    },
+    gain: '+1 💡', stuck: '¿Atascado? Toca 💡 para una pista.', adTitle: 'Sin pistas', adText: 'Mira un anuncio corto para conseguir una pista.', adWatch: 'Ver anuncio', adCancel: 'Ahora no', adPlaying: 'Anuncio de prueba… {n}s', daily: '🎁 ¡5 pistas gratis de hoy!',
+    moves_txt: 'Lo has hecho en {n} movimientos.',
+    colors: ['azul', 'naranja', 'verde', 'rosa'],
+    intro: [
+      "Toca la meta de arriba para llevar el hilo hasta ella.",
+      "El hilo toma el color del clavo que tocas. La meta pide hilo verde. ¡Cuidado con la araña! Se mueve después de cada movimiento tuyo y no puedes ir al clavo donde está.",
+      "Nuevo: pasa por la estrella ★ antes de entrar en la meta.",
+      "Un hilo no puede cruzar su propio color, pero sí otros colores.",
+      "Nuevo: la oruga se come el tramo más antiguo de tu hilo cada 3 movimientos. ¡Una estrella comida ya no cuenta!"
+    ]
+  },
+  en: {
+    tag: 'Draw the thread to the goal', levels: 'Levels', level: 'Level', moves: 'Moves',
+    undo: 'Undo', reset: 'Restart', hint: 'Hint', menu: 'Menu', next: 'Next', retry: 'Retry',
+    complete: 'Level complete!', thread: 'Thread', goal: 'Goal', start: 'Start', how: 'How to play', ok: 'Got it',
+    done: 'You completed every available level! More coming very soon.', best: 'best possible',
+    play: 'Play', cont: 'Continue · Level {n}', soon: 'More levels soon…', stat: '★ {s}  ·  Completed: {n}',
+    bestiary: 'Bugs you have met', bug_spider: 'Spider', bug_cat: 'Caterpillar', bug_web: 'Web',
+    proto: 'Prototype',
+    r1: 'Tap a peg to bring the thread to it.',
+    r2: 'The thread takes the color of the last peg you touched.',
+    r3: "You can't cross your own color, but you can cross other colors.",
+    r4: 'Reach the goal with the color it asks for (shown by the symbol in the center).',
+    cross: "You can't cross a thread of the same color!",
+    same: "You can't go to a peg of the same color as your thread.",
+    stars: 'Collect all the stars ★ before you enter the goal.',
+    rock: 'That peg is blocked.',
+    spider: 'The spider is on that peg! Wait for it to move.',
+    stareaten: 'The caterpillar ate a star! Undo a step and plan again.',
+    r10: 'The caterpillar eats the oldest part of your thread every 3 moves. It frees crossings, but an eaten star no longer counts.',
+    web: 'The web blocks your way!',
+    r8: "The spider moves after each of your moves (see its dotted route). You can't go to the peg it is on.",
+    r9: "Webs block the way: you can't cross them.",
+    r5: 'You must pass through all the stars ★ before entering the goal.',
+    r6: "You can't go to a peg of the same color as your thread: colors must alternate.",
+    r7: 'There are 4 colors: ● blue, ▲ orange, ■ green and ◆ pink.',
+    worlds: ['World 1 · Basics', 'World 2 · Stars', 'World 3 · Alternating colors', 'World 4 · Four colors', 'World 5 · Master', 'World 6 · Maze', 'World 7 · Tangle', 'World 8 · Nest', 'World 9 · The queen'],
+    unlockAll: 'Unlock all levels (test mode)',
+    stars_lbl: 'Stars',
+    goalcolor: 'The goal needs {c} thread. Touch a {c} peg first.',
+    through: "The thread can't pass through another peg.",
+    visited: 'You already used that peg.',
+    deadend: 'No way out from here. Undo a step.',
+    payTitle: 'Your 3 ad-free levels for today are done', payText: 'Watch a short ad to play this level, or go Premium.', payAd: '▶ Watch an ad to play this level', payBuy: '⭐ Premium €2.99: no ads, ever', payNo: 'Not now', plays: 'Today: {n}/3 ad-free levels', premium: '⭐ Premium', buyBtn: '⭐ Remove ads & limits · €2.99', buyTest: 'Test purchase (simulated)',
+    rechTitle: 'Refill hints', rechText: 'Refill your hints up to 30 (once a day).', rechBtn: '🔄 Refill to 30', rechDone: 'Already refilled today. Come back tomorrow.',
+    tg: 'Reach here with|{c} thread', ts: 'You start here', tsp: 'Spider: you can\'t|go to its peg', tst: 'Visit the ★|before the goal!', tcr: 'Don\'t cross a thread|of your own color', tca: 'Caterpillar: eats your|thread every 3 moves', ttap: 'Tap',
+    rg: '🎯 Look at the goal\'s color: you must arrive with thread of that color. Touch a peg of that color first.',
+    dm: {
+      r1: 'Tap a peg.|The thread travels to it. Keep tapping pegs!',
+      r2: 'The thread leaves a blue peg, so it is blue.|Touch the orange peg and the thread turns orange.',
+      rg: 'The goal asks for orange thread, but ours is blue: no good!|First touch an orange peg.|Now we arrive with orange thread!',
+      r3: 'Draw the thread from peg to peg.|Now the thread is blue.|You can\'t cross a thread of your own color.',
+      r8: 'You can\'t go to the spider\'s peg.|The spider moves after each of your moves.|Now the peg is free.|On to the goal!',
+      r5: 'Without the ★ you can\'t enter the goal.|Visit the ★ first.|Now it works!',
+      r10: 'Visit the ★ and keep going.|Keep moving…|Every 3 moves the caterpillar eats the oldest piece.|An eaten ★ no longer counts!|The goal stays shut without the ★.',
+      r6: 'You can\'t go to a peg of your own color.|Alternate: blue to orange works.|And orange to green.',
+      r9: 'Webs block the way.|Go around it another way.|Done!',
+      r7: 'Orange ▲: the thread turns orange.|Green ■: now green.|Pink ◆: the fourth color.'
+    },
+    gain: '+1 💡', stuck: 'Stuck? Tap 💡 for a hint.', adTitle: 'Out of hints', adText: 'Watch a short ad to get a hint.', adWatch: 'Watch ad', adCancel: 'Not now', adPlaying: 'Test ad… {n}s', daily: '🎁 5 free hints today!',
+    moves_txt: 'You did it in {n} moves.',
+    colors: ['blue', 'orange', 'green', 'pink'],
+    intro: [
+      "Tap the goal at the top to bring the thread to it.",
+      "The thread takes the color of the peg you touch. The goal needs green thread. Watch out for the spider! It moves after each of your moves and you can't go to the peg it is on.",
+      "New: pass through the star ★ before entering the goal.",
+      "A thread can't cross its own color, but it can cross other colors.",
+      "New: the caterpillar eats the oldest part of your thread every 3 moves. An eaten star no longer counts!"
+    ]
+  }
+};
+let store = {};
+try { store = JSON.parse(localStorage.getItem('threadlings.v3') || '{}'); } catch (e) { store = {}; }
+function save() { try { localStorage.setItem('threadlings.v3', JSON.stringify(store)); } catch (e) {} }
+function detectLang() {
+  if (store.lang && STR[store.lang]) return store.lang;
+  const l = ((navigator.languages && navigator.languages[0]) || navigator.language || 'en').toLowerCase();
+  return l.startsWith('es') ? 'es' : 'en';
+}
+let lang = detectLang();
+const T = k => STR[lang][k];
+const $ = id => document.getElementById(id);
+
+const COL = ['#5a96ff', '#ffa03c', '#5ad782', '#f06eb4'];
+const SYMS = ['●', '▲', '■', '◆'];
+const BGC = '#151827';
+
+// ---------------------------------------------------------------- state
+const INTRO2 = {
+  es: { 6: 'Mundo 2: más estrellas ★ y más bichos. ¡Piensa bien el orden!',
+        21: 'Nuevo: ya no puedes ir a un clavo del mismo color que tu hilo. ¡Alterna colores!',
+        51: 'Nuevo: aparece el color rosa ◆. Hay que pensar más colores.',
+        28: 'Nuevo: las telarañas bloquean el paso. No puedes cruzarlas.',
+        81: 'Mundo Maestro: todas las reglas a la vez. ¡Suerte!' },
+  en: { 6: 'World 2: more stars ★ and more bugs. Think about the order!',
+        21: "New: you can no longer go to a peg of the same color as your thread. Alternate colors!",
+        51: 'New: the pink color ◆ appears. Think in more colors.',
+        28: "New: webs block the way. You can't cross them.",
+        81: 'Master world: every rule at once. Good luck!' }
+};
+let spd = { x: 0, y: 0 }, catD = { x: 0, y: 0 };
+const eatenN = () => (L && L.cat) ? Math.floor((path.length - 1) / 3) : 0;
+let lvIdx = 0, L = null, path = [0], segT = [0], err = null, hint = null, won = false, msgTimer = null, introShown = false;
+if (!store.unlocked) store.unlocked = 1;
+if (!store.stars) store.stars = {};
+if (store.hints == null) store.hints = 5;
+let dailyGift = false;
+if (!store.hv2) { store.hv2 = 1; if (store.hints < 5) store.hints = 5; save(); }
+(function () { const d = new Date().toDateString(); if (store.hintDay !== d) { if (store.hintDay) { if (store.hints < 5) store.hints = 5; dailyGift = true; } store.hintDay = d; save(); } })();
+function dayState() { const d = new Date().toDateString(); if (!store.day || store.day.d !== d) store.day = { d, played: 0, extra: 0, rech: 0 }; return store.day; }
+function canPlay(i) { if (store.premium || store.stars[i + 1]) return true; const D = dayState(); return D.played < 3 + D.extra; }
+function playsLabel() { const D = dayState(); $('b_prem').textContent = store.premium ? T('premium') : T('buyBtn'); if (!store.premium) $('t_stat').innerHTML += ' · ' + T('plays').replace('{n}', Math.min(D.played, 3) + ''); }
+let payIdx = 0;
+function openPay(i) { payIdx = i; $('p_title').textContent = T('payTitle'); $('p_text').textContent = T('payText'); $('p_ad').textContent = T('payAd'); $('p_buy').textContent = T('payBuy'); $('p_no').textContent = T('payNo'); $('p_ad').disabled = false; $('p_ad').style.display = ''; $('ov_pay').hidden = false; }
+let fails = 0, idleT = null, lvStart = 0, tutKey = '', tutSol = null;
+function idleReset() { clearTimeout(idleT); $('b_hint').classList.remove('glow'); if (L && !won) idleT = setTimeout(nudge, 60000); }
+function nudge() { if (won || $('game').hidden) return; $('b_hint').classList.add('glow'); if (!introShown) setMsg(T('stuck'), 'info'); }
+function hintLabel() { $('b_hint').textContent = '💡 ' + T('hint') + ' (' + store.hints + ')'; }
+
+function setMsg(text, kind, sticky) {
+  const m = $('msg');
+  m.textContent = text || '';
+  m.className = text ? kind : 'info';
+  m.style.visibility = text ? 'visible' : 'hidden';
+  clearTimeout(msgTimer);
+  if (text && !sticky) msgTimer = setTimeout(() => { m.style.visibility = 'hidden'; }, 3800);
+}
+function vib(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} }
+
+// ---------------------------------------------------------------- UI text
+function applyLang() {
+  document.documentElement.lang = lang;
+  $('t_tag').textContent = T('tag');
+  $('b_how').textContent = T('how');
+  $('t_proto').textContent = T('proto');
+  $('b_undo').textContent = '↶ ' + T('undo');
+  $('b_reset').textContent = '⟲ ' + T('reset');
+  hintLabel();
+  $('t_thread').textContent = T('thread') + ':';
+  $('w_menu').textContent = T('menu');
+  $('w_retry').textContent = T('retry');
+  $('w_next').textContent = T('next');
+  $('h_title').textContent = T('how');
+  $('h_close').textContent = T('ok');
+  const rl = ['r1', 'r2', 'rg', 'r3'], u = store.unlocked;
+  if (u >= 2) rl.push('r8');
+  if (u >= 3) rl.push('r5');
+  if (u >= 5) rl.push('r10');
+  if (u >= 21) rl.push('r6');
+  if (u >= 28) rl.push('r9');
+  if (u >= 51) rl.push('r7');
+  slides = rl; showSlide(Math.min(slideI, rl.length - 1));
+  $('h_legend').innerHTML = STR[lang].colors.slice(0, store.unlocked >= 51 ? 4 : 3).map((n, i) => '<span>' + SYMS[i] + ' ' + n + '</span>').join('');
+  buildGrid();
+  if (L) { updateTop(); updateChip(); }
+}
+function buildGrid() {
+  const g = $('grid'); g.innerHTML = '';
+  const total = LEVELS.length, un = Math.min(store.unlocked, total);
+  const WSTART = [0, 5, 20, 50, 80, 110, 160, 210, 260];
+  for (let i = 0; i < un; i++) {
+    const wi = WSTART.indexOf(i);
+    if (wi >= 0) { const h = document.createElement('div'); h.className = 'wh'; h.textContent = STR[lang].worlds[wi]; g.appendChild(h); }
+    const s = store.stars[i + 1] || 0;
+    const b = document.createElement('button');
+    b.className = 'lv' + (!s && i + 1 === un ? ' next' : '');
+    b.innerHTML = (i + 1) + '<small>' + (s ? '★'.repeat(s) : '') + '</small>';
+    b.onclick = () => startLevel(i);
+    g.appendChild(b);
+  }
+  const allDone = un >= total && store.stars[total];
+  if (allDone) { const d = document.createElement('div'); d.className = 'soon'; d.textContent = T('soon'); g.appendChild(d); }
+  else { const q = document.createElement('div'); q.className = 'lv q'; q.textContent = '?'; g.appendChild(q); }
+  // stats + play button + bestiary
+  const done = Object.keys(store.stars).filter(k => store.stars[k] > 0).length;
+  const starSum = Object.keys(store.stars).reduce((a, k) => a + store.stars[k], 0);
+  $('t_stat').innerHTML = T('stat').replace('{s}', '<b>' + starSum + '</b>').replace('{n}', '<b>' + done + '</b>');
+  playsLabel();
+  $('b_play').textContent = (un === 1 && !done) ? T('play') : T('cont').replace('{n}', un);
+  const found = [];
+  if (store.unlocked >= 2) found.push('🕷 ' + T('bug_spider'));
+  if (store.unlocked >= 5) found.push('🐛 ' + T('bug_cat'));
+  if (store.unlocked >= 28) found.push('🕸 ' + T('bug_web'));
+  $('best').innerHTML = found.length ? '<small>' + T('bestiary') + '</small>' + found.map(x => '<span>' + x + '</span>').join('') : '';
+}
+function updateTop() {
+  $('t_level').textContent = T('level') + ' ' + (lvIdx + 1);
+  let mv = T('moves') + ': ' + (path.length - 1);
+  if (L.stars) mv = '★ ' + L.stars.filter(k => path.slice(eatenN()).includes(k)).length + '/' + L.stars.length + ' · ' + (path.length - 1);
+  $('t_moves').textContent = mv;
+}
+function updateChip() {
+  const c = L.pegs[path[path.length - 1]].c;
+  const chip = $('chip');
+  chip.style.background = COL[c];
+  chip.textContent = SYMS[c] + ' ' + STR[lang].colors[c];
+}
+
+// ---------------------------------------------------------------- game flow
+function show(id) { $('menu').hidden = id !== 'menu'; $('game').hidden = id !== 'game'; if (id === 'game') resize(); }
+function startLevel(i) {
+  if (!canPlay(i)) { openPay(i); return; }
+  lvIdx = i; L = LEVELS[i]; path = [0]; segT = [0]; err = null; hint = null; won = false;
+  $('ov_win').hidden = true;
+  show('game');
+  if (L.spider) { const p = L.pegs[L.spider.route[0]]; spd = { x: p.x, y: p.y }; }
+  catD = { x: L.pegs[0].x, y: L.pegs[0].y };
+  fails = 0; idleReset(); lvStart = performance.now(); tutKey = '';
+  if (dailyGift) { dailyGift = false; setTimeout(() => setMsg(T('daily'), 'info'), 300); }
+  updateTop(); updateChip();
+  const intro = INTRO2[lang][i + 1] || STR[lang].intro[i];
+  introShown = !!intro;
+  setMsg(intro || '', 'info', true);
+}
+function tryMove(j) {
+  if (won) return;
+  const r = Hilo.canMove(L, path, j);
+  if (!r.ok) {
+    err = { peg: j, t: performance.now(), at: r.at, reason: r.reason };
+    let txt = T(r.reason);
+    if (r.reason === 'goalcolor') txt = txt.split('{c}').join(STR[lang].colors[L.goalColor]);
+    setMsg(txt, 'err');
+    vib([30, 40, 30]);
+    if (++fails >= 4) { fails = 0; nudge(); }
+    idleReset();
+    return;
+  }
+  path.push(j); segT.push(performance.now());
+  hint = null; introShown = false;
+  setMsg('', 'info');
+  vib(15); idleReset(); fails = 0;
+  updateTop(); updateChip();
+  if (j === L.goal) { won = true; clearTimeout(idleT); setTimeout(win, 650); }
+  else if (!Hilo.shortest(L, path)) { setMsg(T('deadend'), 'err', true); $('b_undo').classList.add('glow'); }
+}
+function win() {
+  const n = path.length - 1, opt = L.opt;
+  const stars = n <= opt ? 3 : n <= opt + 1 ? 2 : 1;
+  const firstTime = !store.stars[lvIdx + 1];
+  if (firstTime) dayState().played++;
+  if (firstTime && store.hints < 9) { store.hints++; hintLabel(); }
+  store.stars[lvIdx + 1] = Math.max(store.stars[lvIdx + 1] || 0, stars);
+  if (lvIdx + 2 > store.unlocked) store.unlocked = Math.min(LEVELS.length, lvIdx + 2);
+  save(); buildGrid();
+  const last = lvIdx === LEVELS.length - 1;
+  $('w_title').textContent = T('complete');
+  $('w_stars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+  $('w_text').textContent = (last ? T('done') : T('moves_txt').replace('{n}', n)) + (firstTime && store.hints <= 9 && !last ? '  ' + T('gain') : '');
+  $('w_next').style.display = last ? 'none' : '';
+  $('ov_win').hidden = false;
+}
+function undo() { if (won || path.length < 2) return; path.pop(); segT.pop(); hint = null; $('b_undo').classList.remove('glow'); if (Hilo.shortest(L, path)) setMsg('', 'info'); idleReset(); updateTop(); updateChip(); }
+function resetLv() { if (won) return; path = [0]; segT = [0]; hint = null; $('b_undo').classList.remove('glow'); setMsg('', 'info'); idleReset(); updateTop(); updateChip(); }
+function giveHint() {
+  if (won) return;
+  const s = Hilo.shortest(L, path);
+  if (!s) { setMsg(T('deadend'), 'err', true); $('b_undo').classList.add('glow'); return; }
+  if (store.hints <= 0) { if (store.premium) openRecharge(); else openAd(); return; }
+  store.hints--; save(); hintLabel();
+  hint = { peg: s[path.length], t: performance.now() }; idleReset();
+}
+function openRecharge() {
+  const used = dayState().rech;
+  $('a_title').textContent = T('rechTitle'); $('a_text').textContent = used ? T('rechDone') : T('rechText');
+  $('a_no').textContent = T('menu') === 'Menú' ? 'Cerrar' : 'Close'; $('a_yes').textContent = T('rechBtn'); $('a_yes').disabled = !!used; $('a_yes').dataset.mode = 'rech';
+  $('ov_ad').hidden = false;
+}
+let adTimer = null;
+function openAd() {
+  $('a_title').textContent = T('adTitle'); $('a_text').textContent = T('adText');
+  $('a_no').textContent = T('adCancel'); $('a_yes').textContent = '▶ ' + T('adWatch'); $('a_yes').disabled = false; $('a_yes').dataset.mode = '';
+  $('ov_ad').hidden = false;
+}
+$('a_no').onclick = () => { clearInterval(adTimer); $('ov_ad').hidden = true; };
+$('a_yes').onclick = () => {
+  if ($('a_yes').dataset.mode === 'rech') { dayState().rech = 1; store.hints = 30; save(); hintLabel(); $('ov_ad').hidden = true; $('a_yes').dataset.mode = ''; giveHint(); return; }
+  let n = 3; $('a_yes').disabled = true; $('a_text').textContent = T('adPlaying').replace('{n}', n);
+  clearInterval(adTimer);
+  adTimer = setInterval(() => {
+    n--;
+    if (n > 0) { $('a_text').textContent = T('adPlaying').replace('{n}', n); return; }
+    clearInterval(adTimer); $('ov_ad').hidden = true;
+    store.hints++; save(); hintLabel(); giveHint();
+  }, 1000);
+};
+
+// ---------------------------------------------------------------- drawing
+const cv = $('cv'), ctx = cv.getContext('2d');
+const LW = 360, LH = 500;
+let scale = 1;
+function resize() {
+  const w = Math.min(window.innerWidth - 28, 420);
+  const h = Math.min(w * LH / LW, window.innerHeight - 290);
+  const w2 = Math.floor(h * LW / LH);
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = w2 + 'px'; cv.style.height = h + 'px';
+  cv.width = Math.floor(w2 * dpr); cv.height = Math.floor(h * dpr);
+  scale = w2 * dpr / LW;
+}
+window.addEventListener('resize', resize);
+const cols_ = () => (L && L.cols) || 5, rows_ = () => (L && L.rows) || 7;
+const PX = p => 40 + p.x * (280 / (cols_() - 1)), PY = p => 48 + p.y * (404 / (rows_() - 1));
+
+function sym(c, x, y, r, fill) {
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  if (c === 0) ctx.arc(x, y, r * .5, 0, 7);
+  else if (c === 1) { ctx.moveTo(x, y - r * .62); ctx.lineTo(x + r * .6, y + r * .42); ctx.lineTo(x - r * .6, y + r * .42); ctx.closePath(); }
+  else if (c === 2) ctx.rect(x - r * .42, y - r * .42, r * .84, r * .84);
+  else { ctx.moveTo(x, y - r * .6); ctx.lineTo(x + r * .5, y); ctx.lineTo(x, y + r * .6); ctx.lineTo(x - r * .5, y); ctx.closePath(); }
+  ctx.fill();
+}
+function ring(x, y, r, col, w) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); }
+function ease(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+function draw(now) {
+  requestAnimationFrame(draw);
+  if (!L || $('game').hidden) return;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.fillStyle = BGC; ctx.fillRect(0, 0, LW, LH);
+  // shake on error
+  let sh = 0;
+  if (err && now - err.t < 350) sh = Math.sin((now - err.t) * .06) * 4 * (1 - (now - err.t) / 350);
+  ctx.translate(sh, 0);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // webs
+  if (L.webs) L.webs.forEach(w => {
+    const a = L.pegs[w[0]], b = L.pegs[w[1]];
+    const x1 = PX(a), y1 = PY(a), x2 = PX(b), y2 = PY(b), dx = x2 - x1, dy = y2 - y1, ln = Math.hypot(dx, dy), nx = -dy / ln, ny = dx / ln;
+    ctx.strokeStyle = 'rgba(235,238,255,.75)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(235,238,255,.45)';
+    for (let k = 1; k <= 5; k++) { const t = k / 6, cx = x1 + dx * t, cy = y1 + dy * t, h = 9 - Math.abs(t - .5) * 8; ctx.beginPath(); ctx.moveTo(cx + nx * h, cy + ny * h); ctx.lineTo(cx - nx * h, cy - ny * h); ctx.stroke(); }
+  });
+  // spider route (dotted)
+  if (L.spider) {
+    const rt = L.spider.route, uniq = rt.filter((v, i) => rt.indexOf(v) === i);
+    ctx.setLineDash([3, 6]); ctx.strokeStyle = 'rgba(180,140,255,.55)'; ctx.lineWidth = 2.5; ctx.beginPath();
+    uniq.forEach((k, i) => { const p = L.pegs[k]; i ? ctx.lineTo(PX(p), PY(p)) : ctx.moveTo(PX(p), PY(p)); });
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // threads
+  const E = eatenN();
+  if (L.cat) { const tp = L.pegs[path[E]]; catD.x += (tp.x - catD.x) * .14; catD.y += (tp.y - catD.y) * .14; }
+  for (let k = 1; k < path.length; k++) {
+    if (k - 1 < E - 1) continue;
+    const a = L.pegs[path[k - 1]], b = L.pegs[path[k]];
+    const p = ease((now - segT[k]) / 260);
+    let x1 = PX(a), y1 = PY(a), x2 = x1 + (PX(b) - x1) * p, y2 = y1 + (PY(b) - y1) * p;
+    if (k - 1 === E - 1) { x1 = PX(catD); y1 = PY(catD); x2 = PX(b); y2 = PY(b); if (Math.hypot(x2 - x1, y2 - y1) < 3) continue; }
+    ctx.strokeStyle = BGC; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = COL[a.c]; ctx.lineWidth = 6.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+  // pegs
+  L.pegs.forEach((p, i) => {
+    const x = PX(p), y = PY(p);
+    if (i === L.goal) return;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(x, y + 2, 19, 0, 7); ctx.fill();
+    ctx.fillStyle = COL[p.c]; ctx.beginPath(); ctx.arc(x, y, 18, 0, 7); ctx.fill();
+    ring(x, y, 18, 'rgba(255,255,255,.35)', 2);
+    sym(p.c, x, y, 18, 'rgba(10,12,20,.55)');
+  });
+  // spider
+  if (L.spider) {
+    const tp = L.pegs[L.spider.route[(path.length - 1) % L.spider.route.length]];
+    spd.x += (tp.x - spd.x) * .16; spd.y += (tp.y - spd.y) * .16;
+    const sx = PX(spd), sy = PY(spd) - 2 + Math.sin(now / 250) * 1.5;
+    ring(PX(tp), PY(tp), 25, 'rgba(255,90,100,.55)', 2.5);
+    ctx.strokeStyle = '#b48cff'; ctx.lineWidth = 2.2;
+    [-1, 1].forEach(side => [-10, -3, 4, 11].forEach(dy => {
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + side * 12, sy + dy * .6 - 6); ctx.lineTo(sx + side * 20, sy + dy + 3); ctx.stroke();
+    }));
+    ctx.fillStyle = '#2b1f3a'; ctx.beginPath(); ctx.arc(sx, sy, 8.5, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#b48cff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(sx - 3, sy - 2, 1.8, 0, 7); ctx.arc(sx + 3, sy - 2, 1.8, 0, 7); ctx.fill();
+  }
+  // stars
+  if (L.stars) L.stars.forEach(k => {
+    const p = L.pegs[k], x = PX(p) + 15, y = PY(p) - 16, vis = path.includes(k), got = path.slice(E).includes(k), ate = vis && !got;
+    ctx.fillStyle = ate ? '#4a4f66' : got ? 'rgba(255,200,64,.35)' : '#ffc840';
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? 5 : 11, a = -Math.PI / 2 + i * Math.PI / 5; ctx[i ? 'lineTo' : 'moveTo'](x + r * Math.cos(a), y + r * Math.sin(a)); }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = ate ? '#ff5a64' : got ? 'rgba(255,200,64,.6)' : '#7a5a10'; ctx.lineWidth = ate ? 2 : 1.5; ctx.stroke();
+  });
+  // caterpillar
+  if (L.cat) {
+    const cx = PX(catD) - 4, cy = PY(catD) - 30 + Math.sin(now / 200) * 1.5;
+    for (let i = 3; i >= 1; i--) {
+      const bx = cx - i * 10, by = cy + Math.sin(now / 160 + i) * 2;
+      ctx.fillStyle = '#8fdc5a'; ctx.beginPath(); ctx.arc(bx, by, 6.5, 0, 7); ctx.fill(); ring(bx, by, 6.5, '#3d7a22', 1.5);
+    }
+    ctx.fillStyle = '#b6ef7e'; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, 7); ctx.fill(); ring(cx, cy, 8, '#3d7a22', 1.5);
+    ctx.fillStyle = '#10121c'; ctx.beginPath(); ctx.arc(cx + 2.5, cy - 2, 1.6, 0, 7); ctx.arc(cx - 1, cy - 2, 1.6, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#3d7a22'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx - 1, cy - 8); ctx.lineTo(cx - 3, cy - 13); ctx.moveTo(cx + 3, cy - 8); ctx.lineTo(cx + 5, cy - 13); ctx.stroke();
+    const m = path.length - 1, n = 3 - (m % 3);
+    ctx.fillStyle = '#10121c'; ctx.beginPath(); ctx.arc(cx + 17, cy - 3, 9, 0, 7); ctx.fill(); ring(cx + 17, cy - 3, 9, n === 1 ? '#ff5a64' : '#8fdc5a', 2);
+    ctx.fillStyle = '#fff'; ctx.font = '700 12px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(n), cx + 17, cy + 1.5);
+  }
+  // goal
+  const g = L.pegs[L.goal], gx = PX(g), gy = PY(g);
+  ctx.fillStyle = '#10121c'; ctx.beginPath(); ctx.arc(gx, gy, 25, 0, 7); ctx.fill();
+  ring(gx, gy, 25, COL[L.goalColor], 5);
+  sym(L.goalColor, gx, gy, 24, COL[L.goalColor]);
+  ctx.fillStyle = '#9aa0bb'; ctx.font = '600 14px system-ui,sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(T('goal'), gx, gy - 34);
+  const s0 = L.pegs[0];
+  ctx.fillText(T('start'), PX(s0), PY(s0) + 38);
+  // tutorial callouts (first 5 levels)
+  if (lvIdx < 5 && !won) {
+    const callout = (x, y, txt, col, up) => {
+      const lines = txt.split('|'); ctx.font = '700 12px system-ui,sans-serif'; ctx.textAlign = 'center';
+      const w = Math.max.apply(null, lines.map(l => ctx.measureText(l).width)) + 18, h = lines.length * 15 + 10;
+      let bx = Math.max(w / 2 + 4, Math.min(LW - w / 2 - 4, x)), by = up ? y - h - 12 : y + 12;
+      const bob = Math.sin(now / 300) * 2; by += up ? -bob : bob;
+      ctx.fillStyle = 'rgba(16,18,28,.94)'; ctx.strokeStyle = col; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(bx - w / 2, by, w, h, 9); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); const ty = up ? by + h : by;
+      ctx.moveTo(x - 6, ty); ctx.lineTo(x, ty + (up ? 8 : -8)); ctx.lineTo(x + 6, ty); ctx.fillStyle = col; ctx.fill();
+      ctx.fillStyle = '#fff'; lines.forEach((l, i) => ctx.fillText(l, bx, by + 17 + i * 15));
+    };
+    const cn = STR[lang].colors[L.goalColor];
+    if (tutKey !== path.join()) { tutKey = path.join(); tutSol = Hilo.shortest(L, path); }
+    const nextGoal = tutSol && tutSol[path.length] === L.goal;
+    if (lvIdx < 3 && path.length < 3 && !nextGoal) callout(gx, gy + 28, T('tg').split('{c}').join(cn), COL[L.goalColor], false);
+    if (path.length === 1 && lvIdx < 2) callout(PX(s0), PY(s0) - 20, T('ts'), '#ffffff', true);
+    if (L.spider && lvIdx === 1) callout(PX(spd), PY(spd) + 14, T('tsp'), '#b48cff', false);
+    if (L.stars && lvIdx === 2 && !L.stars.every(k => path.includes(k))) { const sp = L.pegs[L.stars.find(k => !path.includes(k))]; callout(PX(sp) + 15, PY(sp) - 30, T('tst'), '#ffc840', true); }
+    if (lvIdx === 3 && path.length < 4) callout(LW / 2, LH - 62, T('tcr'), '#ff5a64', true);
+    if (L.cat && lvIdx === 4) callout(PX(catD) - 4, PY(catD) - 36, T('tca'), '#8fdc5a', true);
+    // pointing finger on the next move
+    const idle = now - Math.max(lvStart, segT[segT.length - 1] || 0);
+    if (lvIdx < 2 || idle > 6000) {
+      if (tutSol && tutSol.length > path.length) {
+        const q = L.pegs[tutSol[path.length]], fy = PY(q) + 30 + Math.abs(Math.sin(now / 260)) * 8;
+        ctx.font = '26px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText('👆', PX(q), fy + 12);
+        ring(PX(q), PY(q), 24 + 3 * Math.sin(now / 200), 'rgba(255,214,90,.9)', 3);
+      }
+    }
+  }
+  // current peg pulse
+  const cur = L.pegs[path[path.length - 1]];
+  ring(PX(cur), PY(cur), 24 + 2.5 * Math.sin(now / 220), 'rgba(255,255,255,.85)', 3);
+  // hint
+  if (hint && now - hint.t < 3500) {
+    const h = L.pegs[hint.peg];
+    const a = .5 + .5 * Math.sin((now - hint.t) / 110);
+    ring(PX(h), PY(h), hint.peg === L.goal ? 33 : 27, 'rgba(255,214,90,' + (0.35 + 0.65 * a) + ')', 4);
+  }
+  // error feedback
+  if (err && now - err.t < 900) {
+    const u = (now - err.t) / 900, al = 1 - u;
+    const p = L.pegs[err.peg];
+    ring(PX(p), PY(p), 27, 'rgba(255,90,100,' + al + ')', 4);
+    if (err.at) {
+      const x = PX(err.at), y = PY(err.at);
+      ctx.strokeStyle = 'rgba(255,90,100,' + al + ')'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(x - 9, y - 9); ctx.lineTo(x + 9, y + 9); ctx.moveTo(x + 9, y - 9); ctx.lineTo(x - 9, y + 9); ctx.stroke();
+      ring(x, y, 15, 'rgba(255,90,100,' + al + ')', 3);
+    }
+  }
+}
+requestAnimationFrame(draw);
+
+// ---------------------------------------------------------------- input
+cv.addEventListener('pointerdown', e => {
+  if (!L) return;
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * LW, y = (e.clientY - r.top) / r.height * LH;
+  let best = -1, bd = 34;
+  L.pegs.forEach((p, i) => { const d = Math.hypot(PX(p) - x, PY(p) - y); if (d < bd) { bd = d; best = i; } });
+  if (best >= 0) tryMove(best);
+});
+$('b_back').onclick = () => { show('menu'); buildGrid(); };
+$('b_undo').onclick = undo;
+$('b_reset').onclick = resetLv;
+$('b_hint').onclick = giveHint;
+
+// ---------------------------------------------------------------- how-to-play animated demos (one per rule)
+const DEMOS = {
+  r1: { pegs: [[50, 150, 0], [180, 60, 1], [310, 150, 2]], goal: -1, steps: [[1], [2]] },
+  r2: { pegs: [[50, 150, 0], [170, 55, 1], [310, 140, 2]], goal: -1, steps: [[1], [2]] },
+  rg: { pegs: [[50, 150, 0], [170, 55, 1], [310, 130, 1]], goal: 2, gc: 1, steps: [[2], [1], [2]], bad: [0] },
+  r3: { pegs: [[40, 170, 0], [200, 40, 1], [320, 150, 0], [60, 60, 2]], goal: -1, steps: [[1], [2], [3]], bad: [2] },
+  r8: { pegs: [[40, 150, 0], [160, 45, 1], [160, 150, 2], [310, 95, 1]], goal: 3, gc: 1, spider: [1, 0, 0, 0, 0], steps: [[1], [2], [1], [3]], bad: [0] },
+  r5: { pegs: [[50, 150, 0], [170, 55, 2], [310, 140, 2]], goal: 2, gc: 2, star: 1, steps: [[2], [1], [2]], bad: [0] },
+  r10: { pegs: [[30, 150, 0], [90, 60, 2], [150, 150, 1], [210, 60, 0], [270, 150, 1], [316, 60, 1]], goal: 5, gc: 1, star: 1, cat: 1, steps: [[1], [2], [3], [4], [5]], bad: [4] },
+  r6: { pegs: [[50, 160, 0], [160, 60, 0], [160, 170, 1], [310, 100, 2]], goal: -1, steps: [[1], [2], [3]], bad: [0] },
+  r9: { pegs: [[40, 130, 0], [320, 130, 2], [180, 25, 1], [180, 85, 3], [180, 185, 3]], goal: -1, webs: [[3, 4]], steps: [[1], [2], [1]], bad: [0] },
+  r7: { pegs: [[40, 150, 0], [130, 60, 1], [220, 150, 2], [315, 60, 3]], goal: -1, steps: [[1], [2], [3]] }
+};
+let dctx = null, slides = ['r1'], slideI = 0, slideAuto = true;
+function showSlide(i) {
+  slideI = (i + slides.length) % slides.length; const k = slides[slideI], cv = $('dm1');
+  cv.dataset.k = k; cv._st = null; $('h_rule').textContent = T(k);
+  const nav = $('dm_nav'); nav.innerHTML = '<button class="b" id="dm_p" style="padding:6px 12px">‹</button>' + slides.map((_, j) => '<button class="dt' + (j === slideI ? ' on' : '') + '" data-i="' + j + '" style="width:' + Math.max(12, Math.min(26, 240 / slides.length)) + 'px"></button>').join('') + '<button class="b" id="dm_n" style="padding:6px 12px">›</button>';
+  $('dm_p').onclick = () => { slideAuto = false; showSlide(slideI - 1); };
+  $('dm_n').onclick = () => { slideAuto = false; showSlide(slideI + 1); };
+  [...nav.querySelectorAll('.dt')].forEach(b => b.onclick = () => { slideAuto = false; showSlide(+b.dataset.i); });
+}
+const STEP_MS = 2300;
+function dSym(c, x, y, r, fill) {
+  dctx.fillStyle = fill; dctx.beginPath();
+  if (c === 0) dctx.arc(x, y, r * .5, 0, 7);
+  else if (c === 1) { dctx.moveTo(x, y - r * .62); dctx.lineTo(x + r * .6, y + r * .42); dctx.lineTo(x - r * .6, y + r * .42); dctx.closePath(); }
+  else if (c === 2) dctx.rect(x - r * .42, y - r * .42, r * .84, r * .84);
+  else { dctx.moveTo(x, y - r * .6); dctx.lineTo(x + r * .5, y); dctx.lineTo(x, y + r * .6); dctx.lineTo(x - r * .5, y); dctx.closePath(); }
+  dctx.fill();
+}
+function dStar(x, y, col, st) { dctx.fillStyle = col; dctx.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 4.5 : 10, a = -Math.PI / 2 + i * Math.PI / 5; dctx[i ? 'lineTo' : 'moveTo'](x + r * Math.cos(a), y + r * Math.sin(a)); } dctx.closePath(); dctx.fill(); if (st) { dctx.strokeStyle = st; dctx.lineWidth = 2; dctx.stroke(); } }
+function drawDemo(cv, now) {
+  const D = DEMOS[cv.dataset.k]; if (!D) return;
+  const st0 = cv._st || (cv._st = { t0: now, sp: null });
+  const W = 360, H = 240, dpr = window.devicePixelRatio || 1, cw = cv.clientWidth || 300;
+  if (cv.width !== Math.round(cw * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(cw * dpr * H / W); }
+  dctx = cv.getContext('2d');
+  const sc = cv.width / W; dctx.setTransform(sc, 0, 0, sc, 0, 0); dctx.clearRect(0, 0, W, H);
+  const n = D.steps.length, total = n * STEP_MS + 1500;
+  let t = now - st0.t0; if (t > total) { if (slideAuto) { showSlide(slideI + 1); return; } st0.t0 = now; t = 0; }
+  const si = Math.min(n - 1, Math.floor(t / STEP_MS)), lt = Math.min(t - si * STEP_MS, STEP_MS);
+  const caps = STR[lang].dm[cv.dataset.k].split('|'), capEl = cv.nextElementSibling, ctxt = caps[Math.min(si, caps.length - 1)];
+  if (capEl && capEl.textContent !== ctxt) capEl.textContent = ctxt;
+  const rej = k => (D.bad || []).includes(k), P = D.pegs, p2 = [0];
+  for (let k = 0; k < si; k++) if (!rej(k)) p2.push(D.steps[k][0]);
+  const cur = p2[p2.length - 1], moves = p2.length - 1, eaten = D.cat ? Math.floor(moves / 3) : 0;
+  const col = i => COL[P[i][2]];
+  dctx.lineCap = 'round';
+  // webs
+  if (D.webs) D.webs.forEach(w => { const a = P[w[0]], b = P[w[1]]; dctx.strokeStyle = 'rgba(235,238,255,.8)'; dctx.lineWidth = 2.5; dctx.beginPath(); dctx.moveTo(a[0], a[1]); dctx.lineTo(b[0], b[1]); dctx.stroke(); dctx.lineWidth = 1.5; dctx.strokeStyle = 'rgba(235,238,255,.5)'; for (let k = 1; k <= 5; k++) { const u = k / 6, cx = a[0] + (b[0] - a[0]) * u, cy = a[1] + (b[1] - a[1]) * u; dctx.beginPath(); dctx.moveTo(cx - 12, cy); dctx.lineTo(cx + 12, cy); dctx.stroke(); } });
+  // spider
+  if (D.spider) { const sp = P[D.spider[Math.min(moves, D.spider.length - 1)]]; if (!st0.sp) st0.sp = { x: sp[0], y: sp[1] }; st0.sp.x += (sp[0] - st0.sp.x) * .14; st0.sp.y += (sp[1] - st0.sp.y) * .14; if (t < 40) { st0.sp.x = P[D.spider[0]][0]; st0.sp.y = P[D.spider[0]][1]; }
+    dctx.strokeStyle = 'rgba(255,90,100,.7)'; dctx.lineWidth = 2.5; dctx.beginPath(); dctx.arc(sp[0], sp[1], 25, 0, 7); dctx.stroke();
+    dctx.strokeStyle = '#b48cff'; dctx.lineWidth = 2; [-1, 1].forEach(sd => [-10, -3, 4, 11].forEach(dy => { dctx.beginPath(); dctx.moveTo(st0.sp.x, st0.sp.y); dctx.lineTo(st0.sp.x + sd * 12, st0.sp.y + dy * .6 - 6); dctx.lineTo(st0.sp.x + sd * 20, st0.sp.y + dy + 3); dctx.stroke(); }));
+    dctx.fillStyle = '#2b1f3a'; dctx.beginPath(); dctx.arc(st0.sp.x, st0.sp.y, 8.5, 0, 7); dctx.fill(); dctx.stroke(); }
+  const seg = (a, b, pr, c, w) => { const x1 = P[a][0], y1 = P[a][1], x2 = x1 + (P[b][0] - x1) * pr, y2 = y1 + (P[b][1] - y1) * pr; dctx.strokeStyle = BGC; dctx.lineWidth = w + 5; dctx.beginPath(); dctx.moveTo(x1, y1); dctx.lineTo(x2, y2); dctx.stroke(); dctx.strokeStyle = c; dctx.lineWidth = w; dctx.beginPath(); dctx.moveTo(x1, y1); dctx.lineTo(x2, y2); dctx.stroke(); };
+  for (let k = 1; k < p2.length; k++) { if (k - 1 < eaten) continue; seg(p2[k - 1], p2[k], 1, col(p2[k - 1]), 6); }
+  const tgt = D.steps[si][0], tapT = 650, drawT = 1300, bd = rej(si);
+  let fx, fy;
+  if (lt < tapT) { const u = lt / tapT, e = u * u * (3 - 2 * u); fx = P[cur][0] + (P[tgt][0] - P[cur][0]) * e; fy = P[cur][1] + (P[tgt][1] - P[cur][1]) * e + 20; }
+  else { fx = P[tgt][0]; fy = P[tgt][1] + 20; }
+  let pr = 0; if (lt > tapT) pr = Math.min(1, (lt - tapT) / (drawT - tapT));
+  if (bd) { const q = lt > drawT ? Math.max(0, 1 - (lt - drawT) / 450) * .55 : pr * .55; if (lt > tapT) seg(cur, tgt, q, col(cur), 6);
+    if (lt > tapT + 300 && lt < 1900) { dctx.strokeStyle = '#ff5a64'; dctx.lineWidth = 5; const x = P[tgt][0], y = P[tgt][1]; dctx.beginPath(); dctx.arc(x, y, 27, 0, 7); dctx.stroke(); dctx.beginPath(); dctx.moveTo(x - 9, y - 9); dctx.lineTo(x + 9, y + 9); dctx.moveTo(x + 9, y - 9); dctx.lineTo(x - 9, y + 9); dctx.stroke(); } }
+  else if (lt > tapT) seg(cur, tgt, pr * pr * (3 - 2 * pr), col(cur), 6);
+  P.forEach((p, i) => {
+    if (i === D.goal) { dctx.fillStyle = '#10121c'; dctx.beginPath(); dctx.arc(p[0], p[1], 24, 0, 7); dctx.fill(); dctx.strokeStyle = COL[D.gc]; dctx.lineWidth = 5; dctx.beginPath(); dctx.arc(p[0], p[1], 24, 0, 7); dctx.stroke(); dSym(D.gc, p[0], p[1], 24, COL[D.gc]); dctx.globalAlpha = .35 + .35 * Math.sin(now / 250); dctx.lineWidth = 3; dctx.beginPath(); dctx.arc(p[0], p[1], 31 + 2 * Math.sin(now / 250), 0, 7); dctx.stroke(); dctx.globalAlpha = 1; return; }
+    dctx.fillStyle = COL[p[2]]; dctx.beginPath(); dctx.arc(p[0], p[1], 18, 0, 7); dctx.fill(); dctx.strokeStyle = 'rgba(255,255,255,.35)'; dctx.lineWidth = 2; dctx.stroke(); dSym(p[2], p[0], p[1], 18, 'rgba(10,12,20,.55)');
+  });
+  if (D.star != null) { const p = P[D.star], vis = p2.includes(D.star), got = p2.slice(D.cat ? Math.floor((moves + 2) / 3) : 0).includes(D.star); dStar(p[0] + 15, p[1] - 16, vis && !got ? '#4a4f66' : got ? 'rgba(255,200,64,.4)' : '#ffc840', vis && !got ? '#ff5a64' : '#7a5a10'); }
+  if (D.cat) { const p = P[p2[eaten]], cx = p[0] - 4, cy = p[1] - 30 + Math.sin(now / 200) * 1.5; for (let i = 3; i >= 1; i--) { dctx.fillStyle = '#8fdc5a'; dctx.beginPath(); dctx.arc(cx - i * 10, cy + Math.sin(now / 160 + i) * 2, 6.5, 0, 7); dctx.fill(); } dctx.fillStyle = '#b6ef7e'; dctx.beginPath(); dctx.arc(cx, cy, 8, 0, 7); dctx.fill(); const nn = 3 - (moves % 3); dctx.fillStyle = '#10121c'; dctx.beginPath(); dctx.arc(cx + 17, cy - 3, 9, 0, 7); dctx.fill(); dctx.fillStyle = '#fff'; dctx.font = '700 12px system-ui'; dctx.textAlign = 'center'; dctx.fillText(String(nn), cx + 17, cy + 1.5); }
+  dctx.strokeStyle = 'rgba(255,255,255,.85)'; dctx.lineWidth = 3; dctx.beginPath(); dctx.arc(P[cur][0], P[cur][1], 24 + 2 * Math.sin(now / 220), 0, 7); dctx.stroke();
+  if (lt < drawT) { dctx.font = '26px system-ui'; dctx.textAlign = 'center'; dctx.fillStyle = '#fff'; const press = lt > tapT - 80 && lt < tapT + 120 ? 4 : 0; dctx.fillText('👆', fx, fy + 10 - press); }
+}
+function demoLoop(now) {
+  requestAnimationFrame(demoLoop);
+  if ($('ov_help').hidden) return;
+  document.querySelectorAll('canvas.dm').forEach(cv => { const r = cv.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) drawDemo(cv, now); });
+}
+requestAnimationFrame(demoLoop);
+$('b_help').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
+$('p_no').onclick = () => { clearInterval(adTimer); $('ov_pay').hidden = true; };
+$('p_buy').onclick = () => { if (confirm(T('buyTest'))) { store.premium = 1; store.hints = Math.max(store.hints, 5); save(); $('ov_pay').hidden = true; applyLang(); buildGrid(); hintLabel(); } };
+$('b_prem').onclick = () => { if (store.premium) return; openPay(Math.min(store.unlocked, LEVELS.length) - 1); $('p_title').textContent = T('buyBtn'); $('p_text').textContent = ''; $('p_ad').style.display = 'none'; };
+$('p_ad').onclick = () => {
+  let n = 3; $('p_ad').disabled = true; $('p_text').textContent = T('adPlaying').replace('{n}', n);
+  clearInterval(adTimer);
+  adTimer = setInterval(() => { n--; if (n > 0) { $('p_text').textContent = T('adPlaying').replace('{n}', n); return; }
+    clearInterval(adTimer); dayState().extra++; save(); $('ov_pay').hidden = true; buildGrid(); startLevel(payIdx); }, 1000);
+};
+$('b_how').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
+$('h_close').onclick = () => { $('ov_help').hidden = true; };
+$('b_lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; store.lang = lang; save(); applyLang(); if (L && !$('game').hidden && introShown) setMsg(INTRO2[lang][lvIdx + 1] || STR[lang].intro[lvIdx] || '', 'info', true); };
+$('w_menu').onclick = () => { $('ov_win').hidden = true; show('menu'); buildGrid(); };
+$('w_retry').onclick = () => startLevel(lvIdx);
+$('w_next').onclick = () => startLevel(Math.min(LEVELS.length - 1, lvIdx + 1));
+
+// ---------------------------------------------------------------- home hero animation
+const hero = $('hero'), hctx = hero.getContext('2d');
+function heroSize() {
+  const w = Math.min(window.innerWidth - 28, 432), dpr = window.devicePixelRatio || 1;
+  hero.style.width = w + 'px'; hero.style.height = '120px';
+  hero.width = Math.floor(w * dpr); hero.height = Math.floor(120 * dpr); hero._s = w * dpr / 360;
+}
+window.addEventListener('resize', heroSize); heroSize();
+function hSpider(c, x, y, sc, now) {
+  c.save(); c.translate(x, y); c.scale(sc, sc);
+  c.strokeStyle = '#b48cff'; c.lineWidth = 2.2;
+  [-1, 1].forEach(sd => [-10, -3, 4, 11].forEach(dy => { c.beginPath(); c.moveTo(0, 0); c.lineTo(sd * 12, dy * .6 - 6); c.lineTo(sd * 20, dy + 3 + Math.sin(now / 150 + dy) * 1.5); c.stroke(); }));
+  c.fillStyle = '#2b1f3a'; c.beginPath(); c.arc(0, 0, 8.5, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(-3, -2, 1.8, 0, 7); c.arc(3, -2, 1.8, 0, 7); c.fill();
+  c.restore();
+}
+function hCat(c, x, y, now) {
+  for (let i = 3; i >= 1; i--) { const bx = x - i * 10, by = y + Math.sin(now / 160 + i) * 2.2; c.fillStyle = '#8fdc5a'; c.beginPath(); c.arc(bx, by, 6.5, 0, 7); c.fill(); c.strokeStyle = '#3d7a22'; c.lineWidth = 1.5; c.stroke(); }
+  c.fillStyle = '#b6ef7e'; c.beginPath(); c.arc(x, y, 8, 0, 7); c.fill(); c.stroke();
+  c.fillStyle = '#10121c'; c.beginPath(); c.arc(x + 2.5, y - 2, 1.6, 0, 7); c.arc(x - 1, y - 2, 1.6, 0, 7); c.fill();
+}
+function heroDraw(now) {
+  requestAnimationFrame(heroDraw);
+  if ($('menu').hidden) return;
+  const c = hctx, s = hero._s || 1; c.setTransform(s, 0, 0, s, 0, 0); c.clearRect(0, 0, 360, 120);
+  const un = store.unlocked;
+  const P = [[30, 84, 0], [112, 52, 1], [190, 88, 2], [262, 50, 0], [330, 82, un >= 51 ? 3 : 1]];
+  c.lineCap = 'round';
+  for (let i = 0; i < P.length - 1; i++) {
+    c.strokeStyle = '#151827'; c.lineWidth = 11; c.beginPath(); c.moveTo(P[i][0], P[i][1]); c.lineTo(P[i + 1][0], P[i + 1][1]); c.stroke();
+    c.strokeStyle = COL[P[i][2]]; c.lineWidth = 5.5; c.stroke();
+  }
+  if (un >= 28) { // web in the corner
+    c.strokeStyle = 'rgba(235,238,255,.5)'; c.lineWidth = 1.5;
+    for (let k = 0; k < 5; k++) { const a = k * Math.PI / 8; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(a) * 62, Math.sin(a) * 62); c.stroke(); }
+    for (let r = 16; r <= 58; r += 14) { c.beginPath(); c.arc(0, 0, r, 0, Math.PI / 2); c.stroke(); }
+  }
+  P.forEach((p, i) => { c.fillStyle = COL[p[2]]; c.beginPath(); c.arc(p[0], p[1], 14, 0, 7); c.fill(); c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = 2; c.stroke(); });
+  if (un >= 5) { // caterpillar crawling along the thread
+    const segL = [], tot = []; let T0 = 0;
+    for (let i = 0; i < P.length - 1; i++) { const l = Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]); segL.push(l); T0 += l; }
+    let d = ((now / 28) % (T0 + 60)) , i = 0;
+    while (i < segL.length - 1 && d > segL[i]) { d -= segL[i]; i++; }
+    const u = Math.min(1, d / segL[i]);
+    hCat(c, P[i][0] + (P[i + 1][0] - P[i][0]) * u, P[i][1] + (P[i + 1][1] - P[i][1]) * u - 16, now);
+  }
+  if (un >= 2) { // spider scuttles peg to peg, pausing at each, with a silk drop
+    const n = P.length - 1, per = 1800, tt2 = (now / per) % (2 * n), leg = Math.floor(tt2), f = tt2 - leg;
+    const k = leg < n ? leg : 2 * n - 1 - leg, dir = leg < n ? 1 : -1;
+    const a0 = dir > 0 ? k : k + 1, a1 = dir > 0 ? k + 1 : k;
+    const e = f < .3 ? 0 : f > .85 ? 1 : (f - .3) / .55, ee = e * e * (3 - 2 * e);
+    const sx = P[a0][0] + (P[a1][0] - P[a0][0]) * ee, sy = P[a0][1] + (P[a1][1] - P[a0][1]) * ee - 18 - Math.abs(Math.sin(now / 90)) * (e > 0 && e < 1 ? 3 : 0);
+    hSpider(c, sx, sy, .8, now);
+    const hx = 150 + Math.sin(now / 900) * 6, hy = 18 + 10 * (1 + Math.sin(now / 700)) / 2;
+    c.strokeStyle = 'rgba(235,238,255,.6)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(150, 0); c.lineTo(hx, hy); c.stroke();
+    hSpider(c, hx, hy, .55, now);
+  }
+}
+requestAnimationFrame(heroDraw);
+$('b_play').onclick = () => startLevel(Math.min(store.unlocked, LEVELS.length) - 1);
+let tt = 0, ttT = null;
+$('t_title').onclick = () => { tt++; clearTimeout(ttT); ttT = setTimeout(() => { tt = 0; }, 1500); if (tt >= 5) { tt = 0; store.unlocked = LEVELS.length; save(); applyLang(); } };
+
+applyLang();
+show('menu');
+</script>
+</body>
+</html>
