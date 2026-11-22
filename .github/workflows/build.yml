@@ -17,6 +17,8 @@ jobs:
       - run: npm install
       - name: Generate Android project
         run: npx cap add android
+      - name: Generate launcher icons
+        run: npx --yes @capacitor/assets generate --android --assetPath assets
       - name: Configure AdMob app id
         run: |
           sed -i 's#</resources>#    <string name="admob_app_id">ca-app-pub-8984191487406696~7524980143</string>\n</resources>#' android/app/src/main/res/values/strings.xml
