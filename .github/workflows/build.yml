@@ -44,11 +44,10 @@ jobs:
         with:
           name: threadlings-aab
           path: android/app/build/outputs/bundle/release/*.aab
-      - name: Publish AAB as release
+      - name: Publish AAB on release-aab branch
         if: env.KS_B64 != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          cp android/app/build/outputs/bundle/release/app-release.aab threadlings.aab
-          gh release delete latest-aab --yes --cleanup-tag || true
-          gh release create latest-aab threadlings.aab --title "Latest AAB (build ${{ github.run_number }})" --notes "Signed upload bundle for Google Play."
+          mkdir /tmp/aabpub && cp android/app/build/outputs/bundle/release/app-release.aab /tmp/aabpub/threadlings.aab
+          cd /tmp/aabpub && git init -q -b release-aab && git add threadlings.aab
+          git -c user.name=ci -c user.email=ci@example.com commit -q -m "AAB build ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" release-aab
