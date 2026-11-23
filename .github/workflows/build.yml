@@ -55,6 +55,26 @@ jobs:
         run: |
           echo "$KS_B64" | base64 -d > release.keystore
           jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass "$KS_PASS" android/app/build/outputs/bundle/release/app-release.aab "$KEY_ALIAS"
+      - name: Build signed APK (direct download)
+        if: ${{ env.KS_B64 != '' }}
+        env:
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          UNS=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          $BT/zipalign -p -f 4 "$UNS" /tmp/aligned.apk
+          $BT/apksigner sign --ks ../release.keystore --ks-pass pass:"$KS_PASS" --ks-key-alias "$KEY_ALIAS" --out /tmp/threadlings.apk /tmp/aligned.apk
+          $BT/apksigner verify /tmp/threadlings.apk
+      - name: Publish APK as GitHub Release
+        if: ${{ env.KS_B64 != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest /tmp/threadlings.apk --title "Threadlings (APK, build ${{ github.run_number }})" --notes "Direct download APK. Enable installing from this source when Android asks." --latest
       - uses: actions/upload-artifact@v4
         with:
           name: threadlings-aab
