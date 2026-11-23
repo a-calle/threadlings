@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -42,3 +44,11 @@ jobs:
         with:
           name: threadlings-aab
           path: android/app/build/outputs/bundle/release/*.aab
+      - name: Publish AAB as release
+        if: env.KS_B64 != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab threadlings.aab
+          gh release delete latest-aab --yes --cleanup-tag || true
+          gh release create latest-aab threadlings.aab --title "Latest AAB (build ${{ github.run_number }})" --notes "Signed upload bundle for Google Play."
