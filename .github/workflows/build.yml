@@ -25,6 +25,8 @@ jobs:
         run: |
           sed -i 's#</resources>#    <string name="admob_app_id">ca-app-pub-8984191487406696~7524980143</string>\n</resources>#' android/app/src/main/res/values/strings.xml
           sed -i 's#</application>#    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="@string/admob_app_id"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#</resources>#    <string name="game_services_project_id" translatable="false">836169048593</string>\n</resources>#' android/app/src/main/res/values/strings.xml
+          sed -i 's#</application>#    <meta-data android:name="com.google.android.gms.games.APP_ID" android:value="@string/game_services_project_id"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
           grep -n "admob\|APPLICATION_ID" android/app/src/main/res/values/strings.xml android/app/src/main/AndroidManifest.xml
       - name: Set version code
         run: sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle

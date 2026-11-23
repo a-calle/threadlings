@@ -82,6 +82,7 @@
       <button class="b" id="b_prem"></button>
       <button class="b" id="b_lang">ES / EN</button>
       <button class="b" id="b_snd" style="min-width:48px">🎵</button>
+      <button class="b" id="b_rank" style="min-width:48px" hidden aria-label="ranking">🏆</button>
     </div>
     <p class="proto" id="t_proto"></p>
   </section>
@@ -269,7 +270,7 @@ const STR = {
     through: 'El hilo no puede atravesar otro clavo.',
     visited: 'Ya has pasado por ese clavo.',
     deadend: 'Desde aquí no hay salida. Deshaz algún paso.',
-    payTitle: 'Tus 3 niveles sin anuncios de hoy ya están', payText: 'Para jugar este nivel mira un anuncio corto o pásate a Premium.', payAd: '▶ Ver anuncio y jugar este nivel', payBuy: '⭐ Premium 2,99 €: sin anuncios nunca', payNo: 'Ahora no', plays: 'Hoy: {n}/3 niveles sin anuncios', premium: '⭐ Premium', buyBtn: '⭐ Quitar anuncios y límites · 2,99 €', buyTest: 'Compra de prueba (simulada)',
+    payTitle: 'Tus 3 niveles sin anuncios de hoy ya están', payText: 'Para jugar este nivel mira un anuncio corto o pásate a Premium.', payAd: '▶ Ver anuncio y jugar este nivel', payBuy: '⭐ Premium 2,99 €: sin anuncios nunca', payNo: 'Ahora no', plays: 'Hoy: {n}/3 niveles sin anuncios', premium: '⭐ Premium', rankErr: 'No se pudo abrir el ranking. Comprueba tu conexión y Google Play Juegos.', buyBtn: '⭐ Quitar anuncios y límites · 2,99 €', buyTest: 'Compra de prueba (simulada)',
     rechTitle: 'Recargar ayuda', rechText: 'Recarga tus pistas hasta 30 (una vez al día).', rechBtn: '🔄 Recargar a 30', rechDone: 'Ya recargaste hoy. Vuelve mañana.',
     tg: 'Llega aquí con|hilo {c}', ts: 'Empiezas aquí', tsp: 'Araña: no puedes|ir a su clavo', tst: '¡Pasa por la ★|antes de la meta!', tcr: 'No cruces un hilo|de tu mismo color', tca: 'Oruga: come tu hilo|cada 3 movimientos', ttap: 'Toca',
     rg: '🎯 Fíjate en el color de la meta: hay que llegar con hilo de ese color. Antes pasa por un clavo de ese color.',
@@ -329,7 +330,7 @@ const STR = {
     through: "The thread can't pass through another peg.",
     visited: 'You already used that peg.',
     deadend: 'No way out from here. Undo a step.',
-    payTitle: 'Your 3 ad-free levels for today are done', payText: 'Watch a short ad to play this level, or go Premium.', payAd: '▶ Watch an ad to play this level', payBuy: '⭐ Premium €2.99: no ads, ever', payNo: 'Not now', plays: 'Today: {n}/3 ad-free levels', premium: '⭐ Premium', buyBtn: '⭐ Remove ads & limits · €2.99', buyTest: 'Test purchase (simulated)',
+    payTitle: 'Your 3 ad-free levels for today are done', payText: 'Watch a short ad to play this level, or go Premium.', payAd: '▶ Watch an ad to play this level', payBuy: '⭐ Premium €2.99: no ads, ever', payNo: 'Not now', plays: 'Today: {n}/3 ad-free levels', premium: '⭐ Premium', rankErr: 'Could not open the ranking. Check your connection and Google Play Games.', buyBtn: '⭐ Remove ads & limits · €2.99', buyTest: 'Test purchase (simulated)',
     rechTitle: 'Refill hints', rechText: 'Refill your hints up to 30 (once a day).', rechBtn: '🔄 Refill to 30', rechDone: 'Already refilled today. Come back tomorrow.',
     tg: 'Reach here with|{c} thread', ts: 'You start here', tsp: 'Spider: you can\'t|go to its peg', tst: 'Visit the ★|before the goal!', tcr: 'Don\'t cross a thread|of your own color', tca: 'Caterpillar: eats your|thread every 3 moves', ttap: 'Tap',
     rg: '🎯 Look at the goal\'s color: you must arrive with thread of that color. Touch a peg of that color first.',
@@ -489,6 +490,7 @@ function updateChip() {
 // ---------------------------------------------------------------- music (generative, Web Audio, no audio files)
 const Music = (() => {
   const AC = window.AudioContext || window.webkitAudioContext;
+  const VOL = 1.5;
   let ac, master, conv, dl, bus = null, timer = null, nextT = 0, step = 0, cur = -1, lastLvl = -1, active = false, paused = false;
   const mf = m => 440 * Math.pow(2, (m - 69) / 12);
   const rnd = a => a[Math.floor(Math.random() * a.length)];
@@ -502,7 +504,8 @@ const Music = (() => {
   function init() {
     if (ac || !AC) return !!ac;
     ac = new AC();
-    master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = VOL;
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; master.connect(comp); comp.connect(ac.destination);
     conv = ac.createConvolver(); conv.buffer = impulse(2.6, 2.4);
     const wet = ac.createGain(); wet.gain.value = 0.38; conv.connect(wet); wet.connect(master);
     dl = ac.createDelay(1.5); dl.delayTime.value = 0.42;
@@ -598,7 +601,7 @@ const Music = (() => {
       if (active && i === lastLvl) { lastLvl = i; return; }
       lastLvl = i; cur = pick(); S = STYLES[cur].init(); step = 0;
       newBus(); nextT = ac.currentTime + 0.1; clearInterval(timer); timer = setInterval(sched, 50); active = true; paused = false;
-      master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(0.5, ac.currentTime);
+      master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(VOL, ac.currentTime);
     },
     stop() {   // fade out (back to menu or music turned off)
       if (!ac || !active) return;
@@ -606,7 +609,7 @@ const Music = (() => {
       const t = ac.currentTime; if (bus) { bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(bus.gain.value, t); bus.gain.linearRampToValueAtTime(0, t + 1.2); }
     },
     pause() { if (!ac) return; paused = true; master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0.0001, ac.currentTime + 0.25); },
-    resume() { if (!ac) return; paused = false; nextT = ac.currentTime + 0.1; master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0.5, ac.currentTime + 0.4); },
+    resume() { if (!ac) return; paused = false; nextT = ac.currentTime + 0.1; master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(VOL, ac.currentTime + 0.4); },
     toggle() {
       store.music = enabled() ? 0 : 1; save();
       if (!enabled()) this.stop(); else if (!$('game').hidden) this.level(lvIdx);
@@ -665,7 +668,7 @@ function win() {
   if (firstTime && store.hints < 9) { store.hints++; hintLabel(); }
   store.stars[lvIdx + 1] = Math.max(store.stars[lvIdx + 1] || 0, stars);
   if (lvIdx + 2 > store.unlocked) store.unlocked = Math.min(LEVELS.length, lvIdx + 2);
-  save(); buildGrid();
+  save(); buildGrid(); pgSubmit();
   const last = lvIdx === LEVELS.length - 1;
   $('w_title').textContent = T('complete');
   $('w_stars').textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
@@ -731,6 +734,26 @@ function watchAd(kind, textEl, btn, done0) {
     } catch (e) { console.log('ad', e); Music.resume(); btn.disabled = false; textEl.textContent = T('adFail'); }
   })();
 }
+
+// ---------------------------------------------------------------- ranking (Google Play Games leaderboard, Android only)
+const LB_ID = 'CgkIkcS8_KoYEAIQAA'; // "Total stars" leaderboard (all-time + weekly views are built into the Play Games UI)
+let PG = null, pgOk = false;
+const totalStars = () => Object.keys(store.stars).reduce((a, k) => a + (store.stars[k] || 0), 0);
+async function pgInit() {
+  if (!NATIVE) return;
+  try { PG = Capacitor.Plugins.PlayGames; await PG.initialize(); const r = await PG.signIn(); pgOk = !!(r && r.signedIn); } catch (e) { console.log('pg init', e); }
+}
+async function pgSubmit() { if (!pgOk) return; try { await PG.submitScore({ leaderboardId: LB_ID, score: totalStars() }); } catch (e) { console.log('pg submit', e); } }
+async function openRanking() {
+  try {
+    if (!PG) await pgInit();
+    if (!pgOk) { const r = await PG.signIn({ silent: false }); pgOk = !!(r && r.signedIn); }
+    if (!pgOk) throw new Error('not signed in');
+    await PG.submitScore({ leaderboardId: LB_ID, score: totalStars() });
+    await PG.showLeaderboard({ leaderboardId: LB_ID });
+  } catch (e) { console.log('ranking', e); alert(T('rankErr')); }
+}
+if (NATIVE) { $('b_rank').hidden = false; $('b_rank').onclick = openRanking; }
 async function buyPremium() {
   const ok = () => { store.premium = 1; store.hints = Math.max(store.hints, 5); save(); $('ov_pay').hidden = true; applyLang(); buildGrid(); hintLabel(); };
   if (!NATIVE) { if (confirm(T('buyTest'))) ok(); return; }
@@ -1016,7 +1039,7 @@ function drawDemo(cv, now) {
 }
 function demoLoop(now) {
   requestAnimationFrame(demoLoop);
-adsInit();
+adsInit(); pgInit();
   if ($('ov_help').hidden) return;
   document.querySelectorAll('canvas.dm').forEach(cv => { const r = cv.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) drawDemo(cv, now); });
 }
