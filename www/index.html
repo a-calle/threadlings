@@ -130,6 +130,15 @@
   </div>
 </div>
 
+<div class="overlay" id="ov_lb" hidden>
+  <div class="card">
+    <h2>🏆 Ranking <small style="font-size:11px;opacity:.6">(maqueta web)</small></h2>
+    <div class="row" style="margin:4px 0 8px"><button class="b main" id="lb_all">General</button><button class="b" id="lb_week">Semanal</button></div>
+    <ol id="lb_list" style="text-align:left;margin:0;padding-left:26px;line-height:1.9"></ol>
+    <div class="row" style="margin-top:10px"><button class="b" id="lb_close">OK</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="ov_pay" hidden>
   <div class="card">
     <h2 id="p_title"></h2>
@@ -359,9 +368,11 @@ const STR = {
     ]
   }
 };
+const FREE_MODE = false; // direct-download build: everything free, no ads, no purchase (CI flips this to true for the APK)
 let store = {};
 try { store = JSON.parse(localStorage.getItem('threadlings.v3') || '{}'); } catch (e) { store = {}; }
-function save() { try { localStorage.setItem('threadlings.v3', JSON.stringify(store)); } catch (e) {} }
+if (FREE_MODE) store.premium = 1;
+function save() { try { localStorage.setItem('threadlings.v3', JSON.stringify(FREE_MODE ? Object.assign({}, store, { premium: 0 }) : store)); } catch (e) {} }
 function detectLang() {
   if (store.lang && STR[store.lang]) return store.lang;
   const l = ((navigator.languages && navigator.languages[0]) || navigator.language || 'en').toLowerCase();
@@ -754,6 +765,20 @@ async function openRanking() {
   } catch (e) { console.log('ranking', e); alert(T('rankErr')); }
 }
 if (NATIVE) { $('b_rank').hidden = false; $('b_rank').onclick = openRanking; }
+if (!NATIVE) { // web preview only: simulated leaderboard (the real one is Google Play Games on Android)
+  $('b_rank').hidden = false;
+  const NAMES = ['LunaTeje', 'Aracne99', 'PixelOruga', 'HiloRojo', 'Tejedor', 'NudoFino', 'Seda_77', 'MiniAraña'];
+  const draw = weekly => {
+    const me = totalStars(), base = weekly ? 36 : 640, rows = NAMES.map((n, i) => [n, Math.max(1, Math.round(base * (1 - i * 0.11)))]);
+    rows.push([lang === 'es' ? 'Tú' : 'You', weekly ? Math.min(me, 36) : me]);
+    rows.sort((a, b) => b[1] - a[1]);
+    $('lb_list').innerHTML = rows.map(r => '<li' + (r[0] === 'Tú' || r[0] === 'You' ? ' style="font-weight:700;color:#e8a838"' : '') + '>' + r[0] + ' — ⭐ ' + r[1] + '</li>').join('');
+    $('lb_all').classList.toggle('main', !weekly); $('lb_week').classList.toggle('main', weekly);
+  };
+  $('b_rank').onclick = () => { draw(false); $('ov_lb').hidden = false; };
+  $('lb_all').onclick = () => draw(false); $('lb_week').onclick = () => draw(true);
+  $('lb_close').onclick = () => { $('ov_lb').hidden = true; };
+}
 async function buyPremium() {
   const ok = () => { store.premium = 1; store.hints = Math.max(store.hints, 5); save(); $('ov_pay').hidden = true; applyLang(); buildGrid(); hintLabel(); };
   if (!NATIVE) { if (confirm(T('buyTest'))) ok(); return; }
@@ -1039,7 +1064,7 @@ function drawDemo(cv, now) {
 }
 function demoLoop(now) {
   requestAnimationFrame(demoLoop);
-adsInit(); pgInit();
+if (!FREE_MODE) adsInit(); pgInit();
   if ($('ov_help').hidden) return;
   document.querySelectorAll('canvas.dm').forEach(cv => { const r = cv.getBoundingClientRect(); if (r.bottom > 0 && r.top < innerHeight) drawDemo(cv, now); });
 }
@@ -1047,6 +1072,7 @@ requestAnimationFrame(demoLoop);
 $('b_help').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
 $('p_no').onclick = () => { clearInterval(adTimer); $('ov_pay').hidden = true; };
 $('p_buy').onclick = () => buyPremium();
+if (FREE_MODE) $('b_prem').hidden = true;
 $('b_prem').onclick = () => { if (store.premium) return; openPay(Math.min(store.unlocked, LEVELS.length) - 1); $('p_title').textContent = T('buyBtn'); $('p_text').textContent = ''; $('p_ad').style.display = 'none'; };
 $('p_ad').onclick = () => watchAd('inter', $('p_text'), $('p_ad'), () => { dayState().extra++; save(); $('ov_pay').hidden = true; buildGrid(); startLevel(payIdx); });
 $('b_how').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };

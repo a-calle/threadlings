@@ -62,6 +62,8 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         working-directory: android
         run: |
+          sed -i 's/const FREE_MODE = false;/const FREE_MODE = true;/' ../www/index.html app/src/main/assets/public/index.html
+          grep -c "const FREE_MODE = true" app/src/main/assets/public/index.html
           ./gradlew assembleRelease
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           UNS=$(ls app/build/outputs/apk/release/*.apk | head -1)
