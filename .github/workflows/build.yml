@@ -17,6 +17,19 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - run: npm install
+      - name: Patch Play Games plugin for Capacitor 8 toolchain
+        run: |
+          f=node_modules/@idleflowgames/capacitor-play-games/android/build.gradle
+          python3 - "$f" <<'PY'
+          import sys,re
+          p=sys.argv[1]; s=open(p).read()
+          s=s.replace("import org.jetbrains.kotlin.gradle.dsl.JvmTarget\n","")
+          s=re.sub(r"buildscript \{.*?\n\}\n","buildscript {\n    repositories { google(); mavenCentral() }\n    dependencies { classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20' }\n}\n",s,count=1,flags=re.S)
+          s=s.replace("apply plugin: 'com.android.library'","apply plugin: 'com.android.library'\napply plugin: 'kotlin-android'")
+          s=re.sub(r"kotlin \{.*?\n\}\n","android.kotlinOptions { jvmTarget = '21' }\n",s,count=1,flags=re.S)
+          open(p,'w').write(s)
+          PY
+          cat $f | head -30
       - name: Generate Android project
         run: npx cap add android
       - name: Generate launcher icons
