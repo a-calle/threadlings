@@ -81,6 +81,7 @@
       <button class="b" id="b_how"></button>
       <button class="b" id="b_prem"></button>
       <button class="b" id="b_lang">ES / EN</button>
+      <button class="b" id="b_snd" style="min-width:48px">🎵</button>
     </div>
     <p class="proto" id="t_proto"></p>
   </section>
@@ -90,6 +91,7 @@
       <button class="b" id="b_back" aria-label="menu">←</button>
       <div class="ttl" id="t_level"></div>
       <div class="mv" id="t_moves"></div>
+      <button class="b" id="b_snd2" aria-label="music" style="padding:8px 12px">🎵</button>
       <button class="b" id="b_help" aria-label="help" style="padding:8px 14px;font-weight:800">?</button>
     </div>
     <div id="msg" class="info"></div>
@@ -483,13 +485,148 @@ function updateChip() {
   chip.textContent = SYMS[c] + ' ' + STR[lang].colors[c];
 }
 
+
+// ---------------------------------------------------------------- music (generative, Web Audio, no audio files)
+const Music = (() => {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ac, master, conv, dl, bus = null, timer = null, nextT = 0, step = 0, cur = -1, lastLvl = -1, active = false, paused = false;
+  const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+  const rnd = a => a[Math.floor(Math.random() * a.length)];
+  const PENT = [0, 2, 4, 7, 9], PENTM = [0, 3, 5, 7, 10];
+  const deg = (root, sc, i) => root + sc[((i % 5) + 5) % 5] + 12 * Math.floor(i / 5);
+  function impulse(sec, decay) {
+    const n = ac.sampleRate * sec, b = ac.createBuffer(2, n, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
+    return b;
+  }
+  function init() {
+    if (ac || !AC) return !!ac;
+    ac = new AC();
+    master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+    conv = ac.createConvolver(); conv.buffer = impulse(2.6, 2.4);
+    const wet = ac.createGain(); wet.gain.value = 0.38; conv.connect(wet); wet.connect(master);
+    dl = ac.createDelay(1.5); dl.delayTime.value = 0.42;
+    const fb = ac.createGain(); fb.gain.value = 0.3; const dw = ac.createGain(); dw.gain.value = 0.2;
+    dl.connect(fb); fb.connect(dl); dl.connect(dw); dw.connect(master);
+    return true;
+  }
+  function newBus() {
+    const old = bus, t = ac.currentTime;
+    if (old) { old.gain.cancelScheduledValues(t); old.gain.setValueAtTime(old.gain.value, t); old.gain.linearRampToValueAtTime(0, t + 1.6); setTimeout(() => { try { old.disconnect(); } catch (e) {} }, 4000); }
+    bus = ac.createGain(); bus.gain.setValueAtTime(0, t); bus.gain.linearRampToValueAtTime(1, t + 2);
+    bus.connect(master); bus.connect(conv); bus.connect(dl);
+  }
+  function env(g, t, atk, v, dur) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + atk); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+  function tone(type, f, t, dur, v, atk, det) { const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; if (det) o.detune.value = det; env(g, t, atk || 0.005, v, dur); o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.1); }
+  function bell(f, t, dur, v) { [[1, 1], [2.76, .25], [5.4, .08]].forEach(p => tone('sine', f * p[0], t, dur / p[0], v * p[1], 0.004)); }
+  function marimba(f, t, dur, v) { tone('sine', f, t, dur, v, 0.003); tone('sine', f * 4, t, dur * .25, v * .18, 0.003); }
+  function pluck(f, t, dur, v) {
+    const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    o.type = 'triangle'; o.frequency.value = f; lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(500, t + dur);
+    env(g, t, 0.006, v, dur); o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.1);
+  }
+  function pad(notes, t, dur, v, cut) {
+    notes.forEach(m => [-6, 6].forEach(det => {
+      const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = mf(m); o.detune.value = det; lp.type = 'lowpass'; lp.frequency.value = cut || 800;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + dur * .35); g.gain.linearRampToValueAtTime(0.0001, t + dur);
+      o.connect(lp); lp.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + 0.1);
+    }));
+  }
+  function sub(f, t, dur, v) { tone('sine', f, t, dur, v, 0.02); }
+  function kick(t, v) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(42, t + .12);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + .25);
+    o.connect(g); g.connect(bus); o.start(t); o.stop(t + .3);
+  }
+  function noise(t, dur, v, hp) {
+    const n = Math.floor(ac.sampleRate * dur), b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = ac.createBufferSource(); s.buffer = b;
+    const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp;
+    const g = ac.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(bus); s.start(t);
+  }
+  const STYLES = [
+    { bpm: 66, sub: 2, init: () => ({ i: 5 }), tick(s, t, S) {   // music box
+        const ch = [0, -3, -7, -5][Math.floor(s / 16) % 4];
+        if (s % 16 === 0) { bell(mf(48 + ch), t, 3.5, .16); bell(mf(55 + ch), t + .02, 3, .07); }
+        if (Math.random() < .55) { S.i = Math.max(3, Math.min(12, S.i + rnd([-2, -1, -1, 1, 1, 2]))); bell(mf(deg(60 + ch, PENT, S.i - 3)), t, 2.4, .13); }
+    } },
+    { bpm: 74, sub: 4, init: () => ({}), tick(s, t) {            // lofi
+        const C = [[48, 55, 59, 64], [45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 55, 59]];
+        const ch = C[Math.floor(s / 16) % 4], p = s % 16;
+        if (p === 0) pad(ch.map(m => m + 12), t, 60 / 74 / 4 * 16 * 1.05, .028, 900);
+        if (p === 0 || p === 10) { sub(mf(ch[0] - 12), t, .9, .35); kick(t, .3); }
+        if (p === 4 || p === 12) noise(t, .05, .06, 7000);
+        if (p === 8) noise(t, .12, .05, 2500);
+        if (p % 2 === 0 && Math.random() < .28) pluck(mf(rnd(ch) + rnd([12, 12, 24])), t, .9, .12);
+    } },
+    { bpm: 52, sub: 2, init: () => ({ i: 6 }), tick(s, t, S) {   // misty forest
+        if (s % 32 === 0) pad([45, 52, 57], t, 16, .035, 500);
+        if (s % 32 === 16) pad([43, 50, 55], t, 16, .03, 450);
+        if (Math.random() < .2) { S.i = Math.max(4, Math.min(13, S.i + rnd([-3, -1, 1, 2, 4]))); pluck(mf(deg(57, PENTM, S.i - 4)), t, 2.6, .11); }
+        if (s % 8 === 0 && Math.random() < .5) bell(mf(deg(81, PENTM, Math.floor(Math.random() * 5))), t, 3, .05);
+    } },
+    { bpm: 98, sub: 2, init: () => ({}), tick(s, t) {             // loom
+        const C = [[57, 60, 64, 69], [53, 57, 60, 65], [48, 52, 55, 60], [55, 59, 62, 67]];
+        const ch = C[Math.floor(s / 8) % 4], p = s % 8;
+        const pt = (Math.floor(s / 32) % 2) ? [0, 2, 1, 3, 1, 2, 3, 2] : [0, 1, 2, 3, 2, 1, 2, 1];
+        marimba(mf(ch[pt[p]] + 12), t, .55, .16);
+        if (p === 0) sub(mf(ch[0] - 12), t, 1.1, .3);
+        if (p === 4) sub(mf(ch[0] - 5), t, .6, .18);
+        if (p % 2 === 1) noise(t, .04, .035, 8000);
+        if (p === 6 && Math.random() < .4) marimba(mf(ch[3] + 24), t + .03, .5, .08);
+    } }
+  ];
+  let S = null;
+  function sched() {
+    if (!ac || paused) return;
+    const st = STYLES[cur], dur = 60 / st.bpm / (st.sub === 4 ? 4 : 2);
+    if (nextT < ac.currentTime) nextT = ac.currentTime + 0.05;
+    while (nextT < ac.currentTime + 0.25) { st.tick(step, nextT, S); step++; nextT += dur; }
+  }
+  function enabled() { return store.music !== 0; }
+  function pick() { let n; do { n = Math.floor(Math.random() * STYLES.length); } while (n === cur && STYLES.length > 1); return n; }
+  return {
+    // called when a level starts: random style, never the same twice in a row; retrying the same level keeps the music
+    level(i) {
+      if (!enabled() || !init()) return;
+      if (ac.state === 'suspended') ac.resume();
+      if (active && i === lastLvl) { lastLvl = i; return; }
+      lastLvl = i; cur = pick(); S = STYLES[cur].init(); step = 0;
+      newBus(); nextT = ac.currentTime + 0.1; clearInterval(timer); timer = setInterval(sched, 50); active = true; paused = false;
+      master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(0.5, ac.currentTime);
+    },
+    stop() {   // fade out (back to menu or music turned off)
+      if (!ac || !active) return;
+      active = false; lastLvl = -1; clearInterval(timer); timer = null;
+      const t = ac.currentTime; if (bus) { bus.gain.cancelScheduledValues(t); bus.gain.setValueAtTime(bus.gain.value, t); bus.gain.linearRampToValueAtTime(0, t + 1.2); }
+    },
+    pause() { if (!ac) return; paused = true; master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0.0001, ac.currentTime + 0.25); },
+    resume() { if (!ac) return; paused = false; nextT = ac.currentTime + 0.1; master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0.5, ac.currentTime + 0.4); },
+    toggle() {
+      store.music = enabled() ? 0 : 1; save();
+      if (!enabled()) this.stop(); else if (!$('game').hidden) this.level(lvIdx);
+      return enabled();
+    },
+    on: enabled,
+    suspend() { if (ac && ac.state === 'running') ac.suspend(); },
+    wake() { if (ac && ac.state === 'suspended' && active) ac.resume(); }
+  };
+})();
+function sndLabel() { const t = Music.on() ? '🎵' : '🔇'; ['b_snd', 'b_snd2'].forEach(id => { const e = $(id); if (e) { e.textContent = t; e.setAttribute('aria-label', Music.on() ? 'music on' : 'music off'); } }); }
+document.addEventListener('visibilitychange', () => { document.hidden ? Music.suspend() : Music.wake(); });
+
 // ---------------------------------------------------------------- game flow
-function show(id) { $('menu').hidden = id !== 'menu'; $('game').hidden = id !== 'game'; if (id === 'game') resize(); }
+function show(id) { $('menu').hidden = id !== 'menu'; $('game').hidden = id !== 'game'; if (id === 'game') resize(); else Music.stop(); }
 function startLevel(i) {
   if (!canPlay(i)) { openPay(i); return; }
   lvIdx = i; L = LEVELS[i]; path = [0]; segT = [0]; err = null; hint = null; won = false;
   $('ov_win').hidden = true;
-  show('game');
+  show('game'); Music.level(i);
   if (L.spider) { const p = L.pegs[L.spider.route[0]]; spd = { x: p.x, y: p.y }; }
   catD = { x: L.pegs[0].x, y: L.pegs[0].y };
   fails = 0; idleReset(); lvStart = performance.now(); tutKey = '';
@@ -576,8 +713,9 @@ async function adsInit() {
   } catch (e) { console.log('restore', e); }
 }
 // Shows an ad. Web: simulated 3 s countdown. Native: real AdMob ad. Calls done() only if the ad was watched.
-function watchAd(kind, textEl, btn, done) {
-  btn.disabled = true;
+function watchAd(kind, textEl, btn, done0) {
+  btn.disabled = true; Music.pause();
+  const done = () => { Music.resume(); done0(); };
   if (!NATIVE) {
     let n = 3; textEl.textContent = T('adPlaying').replace('{n}', n); clearInterval(adTimer);
     adTimer = setInterval(() => { n--; if (n > 0) { textEl.textContent = T('adPlaying').replace('{n}', n); return; } clearInterval(adTimer); btn.disabled = false; done(); }, 1000);
@@ -590,7 +728,7 @@ function watchAd(kind, textEl, btn, done) {
       if (kind === 'rewarded') { await AdM.prepareRewardVideoAd({ adId: AD_IDS.rewarded, isTesting: ADS_TEST }); const r = await AdM.showRewardVideoAd(); if (!r) throw new Error('no reward'); }
       else { await AdM.prepareInterstitial({ adId: AD_IDS.inter, isTesting: ADS_TEST }); await AdM.showInterstitial(); }
       btn.disabled = false; done();
-    } catch (e) { console.log('ad', e); btn.disabled = false; textEl.textContent = T('adFail'); }
+    } catch (e) { console.log('ad', e); Music.resume(); btn.disabled = false; textEl.textContent = T('adFail'); }
   })();
 }
 async function buyPremium() {
@@ -604,7 +742,7 @@ function openAd() {
   $('a_no').textContent = T('adCancel'); $('a_yes').textContent = '▶ ' + T('adWatch'); $('a_yes').disabled = false; $('a_yes').dataset.mode = '';
   $('ov_ad').hidden = false;
 }
-$('a_no').onclick = () => { clearInterval(adTimer); $('ov_ad').hidden = true; };
+$('a_no').onclick = () => { clearInterval(adTimer); Music.resume(); $('ov_ad').hidden = true; };
 $('a_yes').onclick = () => {
   if ($('a_yes').dataset.mode === 'rech') { dayState().rech = 1; store.hints = 30; save(); hintLabel(); $('ov_ad').hidden = true; $('a_yes').dataset.mode = ''; giveHint(); return; }
   watchAd('rewarded', $('a_text'), $('a_yes'), () => { $('ov_ad').hidden = true; store.hints++; save(); hintLabel(); giveHint(); });
@@ -890,6 +1028,8 @@ $('b_prem').onclick = () => { if (store.premium) return; openPay(Math.min(store.
 $('p_ad').onclick = () => watchAd('inter', $('p_text'), $('p_ad'), () => { dayState().extra++; save(); $('ov_pay').hidden = true; buildGrid(); startLevel(payIdx); });
 $('b_how').onclick = () => { applyLang(); slideAuto = true; showSlide(0); $('ov_help').hidden = false; };
 $('h_close').onclick = () => { $('ov_help').hidden = true; };
+$('b_snd').onclick = $('b_snd2').onclick = () => { Music.toggle(); sndLabel(); };
+sndLabel();
 $('b_lang').onclick = () => { lang = lang === 'es' ? 'en' : 'es'; store.lang = lang; save(); applyLang(); if (L && !$('game').hidden && introShown) setMsg(INTRO2[lang][lvIdx + 1] || STR[lang].intro[lvIdx] || '', 'info', true); };
 $('w_menu').onclick = () => { $('ov_win').hidden = true; show('menu'); buildGrid(); };
 $('w_retry').onclick = () => startLevel(lvIdx);
